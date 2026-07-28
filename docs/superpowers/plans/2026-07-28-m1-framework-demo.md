@@ -6,7 +6,7 @@
 
 **Architecture:** A Manifest V3 TypeScript/React content script mounts an isolated Shadow DOM panel on supported pages and calls a FastAPI service bound to `127.0.0.1`. The backend exposes a health endpoint and a deterministic demo-assessment endpoint; no real BOSS parsing, LLM call, or persistence is claimed in M1.
 
-**Tech Stack:** Node.js 24, npm workspaces, TypeScript, React, Vite, Vitest, Testing Library, Python 3.14, FastAPI, Pydantic, pytest, httpx.
+**Tech Stack:** Node.js 24, npm workspaces, TypeScript, React, Vite, Vitest, Testing Library, Python 3.14, FastAPI, Pydantic, pytest, httpx2.
 
 ---
 
@@ -59,6 +59,7 @@ Explicitly deferred: real BOSS DOM parsing, LLM providers, SQLite persistence, e
 │     ├─ api.test.ts
 │     ├─ components/CopilotPanel.tsx
 │     └─ components/CopilotPanel.test.tsx
+├─ scripts/python.cmd                   # Unicode-path-safe Python entry using venv packages
 └─ docs/validation/m1-loop-log.md        # unique findings and targeted rechecks
 ```
 
@@ -73,6 +74,7 @@ Explicitly deferred: real BOSS DOM parsing, LLM providers, SQLite persistence, e
 - Create: `extension/tsconfig.json`
 - Create: `extension/vite.config.ts`
 - Create: `extension/public/manifest.json`
+- Create: `scripts/python.cmd`
 
 - [ ] **Step 1: Add root workspace commands**
 
@@ -86,7 +88,7 @@ Create `package.json` with scripts that call the extension workspace and use Win
   "scripts": {
     "test:extension": "npm run test --workspace extension",
     "build:extension": "npm run build --workspace extension",
-    "test:backend": ".venv\\Scripts\\python.exe -m pytest backend/tests -q"
+    "test:backend": "scripts\\python.cmd -m pytest backend/tests -q"
   }
 }
 ```
@@ -103,7 +105,7 @@ Use compatible current releases resolved by pip in `backend/requirements-dev.txt
 fastapi
 uvicorn[standard]
 pytest
-httpx
+httpx2
 ```
 
 - [ ] **Step 4: Configure the extension build**
@@ -122,6 +124,14 @@ Get-Content -Raw extension/public/manifest.json | ConvertFrom-Json | Out-Null
 ```
 
 Expected: npm and pip exit 0 and the source manifest parses as JSON. The production build is intentionally deferred until `content.tsx` exists in Task 4.
+
+Create `scripts/python.cmd` so Python can run from a workspace containing Chinese characters while still using the packages installed in `.venv`:
+
+```bat
+@echo off
+set "PYTHONPATH=%~dp0..\.venv\Lib\site-packages;%PYTHONPATH%"
+py -3.14 %*
+```
 
 - [ ] **Step 6: Commit the foundation**
 
@@ -164,7 +174,7 @@ def test_rejects_invalid_weights(weights: list[int]) -> None:
 
 - [ ] **Step 2: Run the focused test and observe the intended failure**
 
-Run: `.venv\Scripts\python.exe -m pytest backend/tests/test_scoring.py -q`
+Run: `scripts\python.cmd -m pytest backend/tests/test_scoring.py -q`
 
 Expected: collection/import failure because `backend.app.scoring` does not exist.
 
@@ -212,7 +222,7 @@ Create `GET /healthz` and `POST /v1/demo/assessment`. Bind behavior is controlle
 
 - [ ] **Step 8: Run backend tests**
 
-Run: `.venv\Scripts\python.exe -m pytest backend/tests -q`
+Run: `scripts\python.cmd -m pytest backend/tests -q`
 
 Expected: all backend tests pass with no warning caused by project code.
 
@@ -431,7 +441,7 @@ git commit -m "feat: add floating copilot demo panel"
 Document:
 
 ```powershell
-.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8765
+scripts\python.cmd -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8765
 npm.cmd run build:extension
 ```
 
@@ -463,7 +473,7 @@ git commit -m "docs: add M1 acceptance runbook"
 Run the complete automated baseline once:
 
 ```powershell
-.venv\Scripts\python.exe -m pytest backend/tests -q
+scripts\python.cmd -m pytest backend/tests -q
 npm.cmd run test --workspace extension -- --run
 npm.cmd run build --workspace extension
 ```

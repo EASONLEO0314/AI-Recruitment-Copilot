@@ -9,6 +9,6 @@
     "build:extension": "npm run build --workspace extension",
     "test:extension": "npm run test:run --workspace extension",
     "typecheck:extension": "npm run typecheck --workspace extension",
-    "test:backend": ".venv\\Scripts\\python.exe -m pytest backend/tests -q"
+    "test:backend": "scripts\\python.cmd -m pytest backend/tests -q"
   }
 }
