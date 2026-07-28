@@ -7,8 +7,10 @@
   ],
   "scripts": {
     "build:extension": "npm run build --workspace extension",
+    "start:backend": "scripts\\python.cmd -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8765",
     "test:extension": "npm run test:run --workspace extension",
     "typecheck:extension": "npm run typecheck --workspace extension",
-    "test:backend": "scripts\\python.cmd -m pytest backend/tests -q"
+    "test:backend": "scripts\\python.cmd -m pytest backend/tests -q",
+    "verify": "npm run test:backend && npm run test:extension && npm run typecheck:extension && npm run build:extension"
   }
 }
