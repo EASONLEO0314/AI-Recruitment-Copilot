@@ -13,7 +13,6 @@ export default defineConfig({
         assetFileNames: '[name][extname]',
         entryFileNames: 'content.js',
         format: 'iife',
-        inlineDynamicImports: true,
       },
     },
   },
