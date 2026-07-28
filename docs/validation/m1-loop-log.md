@@ -51,7 +51,7 @@
 - `npm.cmd run build --workspace extension` → 构建通过；`content.js` 206,570 字节，gzip 65.05 kB。
 - 产物检查确认 Manifest V3、入口 `content.js`、Shadow CSS 字符串和重复挂载标识存在。
 
-## 最终闭合
+## 代码审查前闭合
 
 已执行的运行时烟雾检查：
 
@@ -67,6 +67,36 @@
 - 扩展：3 个测试文件、11 passed，0 failed。
 - TypeScript：`tsc --noEmit` 通过，0 error。
 - 生产构建：Vite 8.1.5 构建通过，16 个模块；`content.js` 206.57 kB，gzip 65.05 kB；0 warning。
-- 最终闭合没有发现新问题，因此使用 0 个修复轮次，没有重复运行全量流程。
+- 该次闭合没有发现新问题，因此使用 0 个修复轮次，没有重复运行全量流程。
 
 Chrome 扩展尚未安装到浏览器，因此真实浏览器中的视觉、折叠、剪贴板和原页面兼容性仍属未验证项，留给明日人工验收。
+
+## 独立代码审查后的定向修复
+
+使用轮次：1 / 8
+
+| 轮次 | 唯一问题指纹 | 根因与处理 | 定向验证 | 结果 |
+|---|---|---|---|---|
+| 1 | `chrome:content-script-cross-origin:localhost` | Chrome 官方文档确认内容脚本按网页来源受同源策略约束；将本机请求移到 MV3 Service Worker，内容脚本只发送类型化消息，后台只接受 `health` 和 `demo-assessment` 两个固定操作。 | API/后台定向测试、Manifest 测试、类型检查、双入口构建 | 定向检查通过，生成 `content.js` 与 `background.js`。 |
+| 1 | `extension:unvalidated-runtime-response` | 原客户端只做 TypeScript 断言。增加健康与评估响应的运行时结构校验，格式错误返回 `INVALID_RESPONSE`。 | `src/api.test.ts` | 包括畸形响应在内的 6 个客户端测试通过。 |
+| 1 | `ui:copy-feedback-not-temporary` | “已复制”没有自动清除。增加 1.8 秒定时清除和卸载清理。 | 单独运行复制反馈定时测试 | 1 passed，6 skipped。 |
+
+审查意见的证据核验：
+
+- 审查者认为本机 CORS 正则转义错误；新增合法本机来源和任意网页来源的 preflight 测试后，3 个健康/CORS 测试通过，因此没有无依据修改正则。
+- 审查者的只读沙箱无法调用宿主 `py`；主任务已通过受控宿主执行重复运行 Python 测试，并真实启动 Uvicorn 完成 HTTP 烟雾检查，因此该现象归类为审查沙箱限制，不是用户环境中的已证实产品缺陷。
+
+## 最终闭合
+
+最终命令：`npm.cmd run verify`
+
+审查修复后的最终事实：
+
+- 后端：12 passed，0 failed，0 warning。
+- 扩展：5 个测试文件、20 passed，0 failed。
+- TypeScript：`tsc --noEmit` 通过，0 error。
+- 生产构建：Vite 8.1.5 双入口构建通过；`content.js` 208.06 kB（gzip 65.41 kB），`background.js` 1.29 kB（gzip 0.71 kB）；0 warning。
+- 最终构建的 Manifest 为 V3，声明 `background.js` Service Worker、`content.js` 内容脚本，host permission 仅为 `http://127.0.0.1:8765/*`。
+- 最终闭合没有发现新问题，使用 0 个额外修复轮次，没有再次运行全量流程。
+
+Chrome 人工验收仍未执行；真实浏览器视觉、复制权限和 BOSS 页面兼容性不能标记为通过。

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getDemoAssessment, getHealth } from '../api';
 import type {
@@ -62,6 +62,7 @@ export function CopilotPanel() {
   const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
   const [activeMessageType, setActiveMessageType] = useState<MessageType>('greeting');
   const [copyFeedback, setCopyFeedback] = useState('');
+  const copyFeedbackTimer = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
 
   const connect = useCallback(async () => {
     setConnection('connecting');
@@ -81,6 +82,12 @@ export function CopilotPanel() {
     void connect();
   }, [connect]);
 
+  useEffect(() => () => {
+    if (copyFeedbackTimer.current !== null) {
+      globalThis.clearTimeout(copyFeedbackTimer.current);
+    }
+  }, []);
+
   const activeMessage = useMemo(
     () => assessment?.messages.find((message) => message.type === activeMessageType),
     [activeMessageType, assessment],
@@ -93,6 +100,13 @@ export function CopilotPanel() {
     try {
       await navigator.clipboard.writeText(activeMessage.content);
       setCopyFeedback('已复制');
+      if (copyFeedbackTimer.current !== null) {
+        globalThis.clearTimeout(copyFeedbackTimer.current);
+      }
+      copyFeedbackTimer.current = globalThis.setTimeout(() => {
+        setCopyFeedback('');
+        copyFeedbackTimer.current = null;
+      }, 1800);
     } catch {
       setCopyFeedback('复制失败，请手动选择文本');
     }
@@ -234,6 +248,10 @@ export function CopilotPanel() {
                     aria-selected={activeMessageType === message.type}
                     onClick={() => {
                       setActiveMessageType(message.type);
+                      if (copyFeedbackTimer.current !== null) {
+                        globalThis.clearTimeout(copyFeedbackTimer.current);
+                        copyFeedbackTimer.current = null;
+                      }
                       setCopyFeedback('');
                     }}
                   >

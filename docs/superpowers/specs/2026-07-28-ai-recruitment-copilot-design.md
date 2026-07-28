@@ -81,7 +81,8 @@ flowchart LR
     CS --> UI["React 悬浮窗 / 折叠条"]
     CS --> Parser["页面适配与结构化解析"]
     Parser --> Redactor["本地 PII 脱敏"]
-    Redactor --> API["FastAPI 本机服务"]
+    Redactor --> SW["MV3 Service Worker"]
+    SW --> API["FastAPI 本机服务"]
     API --> Flow["LangGraph 分析流程"]
     Flow --> Provider["LLM Provider Adapter"]
     Flow --> Score["确定性评分引擎"]
@@ -97,7 +98,8 @@ flowchart LR
 - `content script` 检测支持的页面类型、读取已渲染内容并监听单页应用路由变化。
 - 页面解析器按“页面类型 + 适配器版本”隔离，避免选择器散落到 UI 或网络代码中。
 - UI 挂载在 Shadow DOM 中，隔离 BOSS 页面的 CSS，降低样式冲突。
-- 扩展仅与 `http://127.0.0.1:<port>` 通信；CORS 只允许本扩展来源。
+- 内容脚本不直接跨域请求本机服务，而是通过 `chrome.runtime.sendMessage` 调用 MV3 Service Worker；Service Worker 只代理白名单中的固定本机端点，不接受任意 URL。
+- Service Worker 仅与 `http://127.0.0.1:<port>` 通信；Manifest 的 host permission 只包含本机 API 来源。
 - 不注入自动点击、自动输入或自动发送逻辑。
 
 ### 5.2 本机后端

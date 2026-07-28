@@ -1,6 +1,6 @@
 # AI Recruitment Copilot
 
-AI Recruitment Copilot 是一个本地优先的招聘辅助工具。当前仓库处于 **M1 框架演示阶段**：Chrome 网页悬浮窗可以连接本机 FastAPI 服务，展示由后端确定性计算的演示评估，并提供折叠、证据展开、话术切换和手动复制交互。
+AI Recruitment Copilot 是一个本地优先的招聘辅助工具。当前仓库处于 **M1 框架演示阶段**：Chrome 网页悬浮窗通过扩展 Service Worker 连接本机 FastAPI 服务，展示由后端确定性计算的演示评估，并提供折叠、证据展开、话术切换和手动复制交互。
 
 > 当前所有候选人、岗位、分数、证据和话术均为明确标注的演示数据。M1 尚未读取真实 BOSS 简历，未调用 LLM，未接入 SQLite，也不会点击、填写或发送网页内容。
 
@@ -93,6 +93,7 @@ npm.cmd run build:extension
 - 明确标注为 demo 的评估接口。
 - 后端确定性权重校验和总分计算。
 - Chrome Manifest V3 构建产物。
+- 只允许两个固定本机端点的 MV3 Service Worker 网络代理。
 - Shadow DOM 隔离的网页悬浮窗和折叠条。
 - 在线、连接中、离线及重试状态。
 - 分项分数、置信度、理由、证据、亮点、风险和待确认问题展示。

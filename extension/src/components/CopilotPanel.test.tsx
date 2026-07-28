@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -140,5 +140,27 @@ describe('CopilotPanel', () => {
 
     expect(writeText).toHaveBeenCalledWith('您好，想和您沟通 AI4S 工程师岗位。');
     expect(screen.getByText('已复制')).toBeInTheDocument();
+  });
+
+  it('clears copy-success feedback after a short delay', async () => {
+    vi.useFakeTimers();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
+    render(<CopilotPanel />);
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: '复制话术' }));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText('已复制')).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(2000));
+    expect(screen.queryByText('已复制')).not.toBeInTheDocument();
   });
 });

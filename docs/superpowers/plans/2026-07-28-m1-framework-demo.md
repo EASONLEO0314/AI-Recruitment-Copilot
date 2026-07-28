@@ -4,7 +4,7 @@
 
 **Goal:** Build a locally runnable Chrome floating panel and FastAPI service that demonstrate connectivity, deterministic sample scoring, collapsible UI, evidence details, and copy-only communication suggestions for tomorrow's acceptance.
 
-**Architecture:** A Manifest V3 TypeScript/React content script mounts an isolated Shadow DOM panel on supported pages and calls a FastAPI service bound to `127.0.0.1`. The backend exposes a health endpoint and a deterministic demo-assessment endpoint; no real BOSS parsing, LLM call, or persistence is claimed in M1.
+**Architecture:** A Manifest V3 TypeScript/React content script mounts an isolated Shadow DOM panel on supported pages and sends typed messages to an extension Service Worker. The Service Worker proxies only two fixed endpoints on the FastAPI service bound to `127.0.0.1`; no real BOSS parsing, LLM call, or persistence is claimed in M1.
 
 **Tech Stack:** Node.js 24, npm workspaces, TypeScript, React, Vite, Vitest, Testing Library, Python 3.14, FastAPI, Pydantic, pytest, httpx2.
 
@@ -52,13 +52,15 @@ Explicitly deferred: real BOSS DOM parsing, LLM providers, SQLite persistence, e
 │  ├─ public/manifest.json
 │  └─ src/
 │     ├─ api.ts                         # local backend client
+│     ├─ background.ts                  # fixed-endpoint localhost network proxy
 │     ├─ contracts.ts                   # M1 response types
 │     ├─ content.tsx                    # Shadow DOM mount entry
 │     ├─ styles.css                     # panel-scoped visual system
 │     ├─ test/setup.ts
 │     ├─ api.test.ts
 │     ├─ components/CopilotPanel.tsx
-│     └─ components/CopilotPanel.test.tsx
+│     ├─ components/CopilotPanel.test.tsx
+│     └─ manifest.test.ts              # MV3 service worker declaration
 ├─ scripts/python.cmd                   # Unicode-path-safe Python entry using venv packages
 └─ docs/validation/m1-loop-log.md        # unique findings and targeted rechecks
 ```
@@ -239,15 +241,20 @@ git commit -m "feat: add deterministic demo assessment API"
 - Create: `extension/src/contracts.ts`
 - Create: `extension/src/api.ts`
 - Create: `extension/src/api.test.ts`
+- Create: `extension/src/background.ts`
+- Create: `extension/src/background.test.ts`
+- Create: `extension/src/validation.ts`
 - Create: `extension/src/test/setup.ts`
+- Modify: `extension/public/manifest.json`
+- Modify: `extension/vite.config.ts`
 
 - [ ] **Step 1: Define TypeScript contracts matching the backend**
 
-Define `ConnectionState = 'connecting' | 'online' | 'offline'`, `DimensionResult`, `MessageSuggestion`, and `AssessmentResponse`. Use the same snake_case JSON property names as the API to avoid an untested translation layer in M1.
+Define `ConnectionState = 'connecting' | 'online' | 'offline'`, `DimensionResult`, `MessageSuggestion`, `AssessmentResponse`, the two allowed `ApiRequestMessage` variants, and typed success/failure envelopes. Use the same snake_case JSON property names as the API to avoid an untested translation layer in M1.
 
 - [ ] **Step 2: Write failing client tests**
 
-Mock `fetch` and verify:
+Mock `chrome.runtime.sendMessage` and verify that the content-side client sends a named operation rather than an arbitrary URL:
 
 ```ts
 import { vi } from 'vitest';
@@ -255,43 +262,40 @@ import { vi } from 'vitest';
 import { getHealth } from './api';
 
 
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
+const health = {
+  request_id: 'health-1',
+  status: 'ok',
+  service: 'ai-recruitment-copilot',
+  version: '0.1.0',
+};
+
+
+it('asks the service worker for health', async () => {
+  const sendMessage = vi.fn().mockResolvedValue({ ok: true, data: health });
+  vi.stubGlobal('chrome', { runtime: { sendMessage } });
+  await getHealth(1200);
+  expect(sendMessage).toHaveBeenCalledWith({
+    type: 'ARC_API_REQUEST',
+    operation: 'health',
+    timeout_ms: 1200,
   });
-}
-
-
-it('requests the local health endpoint', async () => {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ status: 'ok' })));
-  await getHealth();
-  expect(fetch).toHaveBeenCalledWith('http://127.0.0.1:8765/healthz', expect.any(Object));
-});
-
-it('times out with a typed offline error', async () => {
-  vi.useFakeTimers();
-  vi.stubGlobal('fetch', vi.fn(() => new Promise(() => undefined)));
-  const request = getHealth(50);
-  await vi.advanceTimersByTimeAsync(51);
-  await expect(request).rejects.toMatchObject({ code: 'BACKEND_UNAVAILABLE' });
 });
 ```
 
-- [ ] **Step 3: Implement timeout-safe API functions**
+- [ ] **Step 3: Implement the fixed-operation Service Worker boundary**
 
-Implement `getHealth(timeoutMs = 1500)` and `getDemoAssessment(candidateLabel, timeoutMs = 5000)` with `AbortController`. Convert network, timeout, and invalid JSON failures to an `ApiError` with code `BACKEND_UNAVAILABLE` or `INVALID_RESPONSE`.
+Implement `getHealth(timeoutMs = 1500)` and `getDemoAssessment(candidateLabel, timeoutMs = 5000)` through `chrome.runtime.sendMessage`. In `background.ts`, accept only `health` and `demo-assessment`, map them to the two fixed localhost endpoints, and perform timeout-safe fetches with `AbortController`. Validate response shapes before passing them to React. Register `background.js` in the MV3 manifest and build it as a second self-contained IIFE entry.
 
 - [ ] **Step 4: Run focused client tests**
 
-Run: `npm.cmd run test --workspace extension -- src/api.test.ts --run`
+Run: `npm.cmd run test --workspace extension -- src/api.test.ts src/background.test.ts src/manifest.test.ts --run`
 
-Expected: all API client tests pass.
+Expected: content-client, background transport, operation whitelist, malformed response, and manifest tests all pass.
 
 - [ ] **Step 5: Commit the client boundary**
 
 ```powershell
-git add extension/src/contracts.ts extension/src/api.ts extension/src/api.test.ts extension/src/test/setup.ts
+git add extension/src/contracts.ts extension/src/api.ts extension/src/api.test.ts extension/src/background.ts extension/src/background.test.ts extension/src/validation.ts extension/src/test/setup.ts extension/public/manifest.json extension/vite.config.ts
 git commit -m "feat: connect extension to local API"
 ```
 
