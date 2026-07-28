@@ -86,7 +86,7 @@ Create `package.json` with scripts that call the extension workspace and use Win
   "scripts": {
     "test:extension": "npm run test --workspace extension",
     "build:extension": "npm run build --workspace extension",
-    "test:backend": "py -3.14 -m pytest backend/tests -q"
+    "test:backend": ".venv\\Scripts\\python.exe -m pytest backend/tests -q"
   }
 }
 ```
@@ -110,17 +110,18 @@ httpx
 
 Configure a single Vite IIFE entry at `src/content.tsx`, output as `dist/content.js`, and copy `public/manifest.json` into `dist`. The manifest must match `https://www.zhipin.com/*` and `http://127.0.0.1/*`, request only `storage` and `clipboardWrite`, and connect only to `http://127.0.0.1:8765/*`.
 
-- [ ] **Step 5: Install dependencies and verify manifests**
+- [ ] **Step 5: Install dependencies and verify the source manifest**
 
 Run:
 
 ```powershell
 npm.cmd install
-py -3.14 -m pip install -r backend/requirements-dev.txt
-npm.cmd run build:extension
+py -3.14 -m venv .venv
+.venv\Scripts\python.exe -m pip install -r backend/requirements-dev.txt
+Get-Content -Raw extension/public/manifest.json | ConvertFrom-Json | Out-Null
 ```
 
-Expected: npm and pip exit 0; `extension/dist/manifest.json` and `extension/dist/content.js` exist.
+Expected: npm and pip exit 0 and the source manifest parses as JSON. The production build is intentionally deferred until `content.tsx` exists in Task 4.
 
 - [ ] **Step 6: Commit the foundation**
 
@@ -163,7 +164,7 @@ def test_rejects_invalid_weights(weights: list[int]) -> None:
 
 - [ ] **Step 2: Run the focused test and observe the intended failure**
 
-Run: `py -3.14 -m pytest backend/tests/test_scoring.py -q`
+Run: `.venv\Scripts\python.exe -m pytest backend/tests/test_scoring.py -q`
 
 Expected: collection/import failure because `backend.app.scoring` does not exist.
 
@@ -211,7 +212,7 @@ Create `GET /healthz` and `POST /v1/demo/assessment`. Bind behavior is controlle
 
 - [ ] **Step 8: Run backend tests**
 
-Run: `py -3.14 -m pytest backend/tests -q`
+Run: `.venv\Scripts\python.exe -m pytest backend/tests -q`
 
 Expected: all backend tests pass with no warning caused by project code.
 
@@ -430,7 +431,7 @@ git commit -m "feat: add floating copilot demo panel"
 Document:
 
 ```powershell
-py -3.14 -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8765
+.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8765
 npm.cmd run build:extension
 ```
 
@@ -462,7 +463,7 @@ git commit -m "docs: add M1 acceptance runbook"
 Run the complete automated baseline once:
 
 ```powershell
-py -3.14 -m pytest backend/tests -q
+.venv\Scripts\python.exe -m pytest backend/tests -q
 npm.cmd run test --workspace extension -- --run
 npm.cmd run build --workspace extension
 ```

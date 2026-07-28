@@ -1,0 +1,27 @@
+# JavaScript
+node_modules/
+extension/dist/
+coverage/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local configuration and data
+.env
+*.sqlite
+*.sqlite3
+*.db
+*.log
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local worktrees
+.worktrees/

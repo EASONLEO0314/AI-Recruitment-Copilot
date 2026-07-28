@@ -1,0 +1,14 @@
+{
+  "name": "ai-recruitment-copilot",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "extension"
+  ],
+  "scripts": {
+    "build:extension": "npm run build --workspace extension",
+    "test:extension": "npm run test:run --workspace extension",
+    "typecheck:extension": "npm run typecheck --workspace extension",
+    "test:backend": ".venv\\Scripts\\python.exe -m pytest backend/tests -q"
+  }
+}
