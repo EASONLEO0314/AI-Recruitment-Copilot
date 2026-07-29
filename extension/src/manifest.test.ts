@@ -11,12 +11,15 @@ it('registers the fixed localhost proxy as an MV3 service worker', () => {
 
 
 it('injects into supported frames without privileged extension APIs', () => {
-  expect(manifest.content_scripts[0].matches).toEqual([
+  const contentScript = manifest.content_scripts[0];
+
+  expect(contentScript.matches).toEqual([
     'https://www.zhipin.com/*',
     'http://127.0.0.1/*',
   ]);
-  expect(manifest.content_scripts[0].all_frames).toBe(true);
-  expect(manifest.permissions).not.toContain('debugger');
-  expect(manifest.permissions).not.toContain('scripting');
+  expect(contentScript.all_frames).toBe(true);
+  expect(contentScript).not.toHaveProperty('match_about_blank');
+  expect(contentScript).not.toHaveProperty('match_origin_as_fallback');
+  expect(manifest.permissions).toEqual(['clipboardWrite', 'storage']);
   expect(manifest.host_permissions).toEqual(['http://127.0.0.1:8765/*']);
 });
