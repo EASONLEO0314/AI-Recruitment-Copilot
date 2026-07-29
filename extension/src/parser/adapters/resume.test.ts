@@ -161,6 +161,43 @@ describe('resume frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('parses nested sections and item roots only within their nearest owner', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="resume-content">
+        <div class="section-item">
+          <section class="resume-item">
+            <h2 class="section-title">工作经历</h2>
+            <article class="history-item">
+              <div class="item-content">
+                <span class="company-name">嵌套示例科技</span>
+                <span class="position-name">平台工程师</span>
+              </div>
+            </article>
+          </section>
+          <section class="resume-item">
+            <h2 class="section-title">教育经历</h2>
+            <article class="history-item">
+              <span class="school-name">嵌套示例大学</span>
+            </article>
+          </section>
+        </div>
+      </main>`);
+
+    const snapshot = parseResumeFrame(document, capturedAt);
+
+    expect(snapshot.profile?.work_experiences).toEqual([{
+      company: '嵌套示例科技',
+      title: '平台工程师',
+    }]);
+    expect(snapshot.profile?.education).toEqual([{
+      school: '嵌套示例大学',
+    }]);
+    expect(snapshot.profile?.work_experiences).toHaveLength(1);
+    expect(snapshot.profile?.education).toHaveLength(1);
+    expect(snapshot.warnings).toEqual([]);
+    expectNoPageOperations();
+  });
+
   it('ignores hidden header fields, base tokens, skills, and section items', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="geek-resume">

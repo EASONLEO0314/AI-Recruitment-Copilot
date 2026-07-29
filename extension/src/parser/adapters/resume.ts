@@ -6,12 +6,13 @@ import type {
   WorkExperience,
 } from '../../contracts';
 import { allTexts, firstText, isHidden } from '../dom';
-import { buildProfileSnapshot, buildStatusSnapshot } from '../snapshot';
+import { buildProfileSnapshot, buildStatusSnapshot, normalizeText } from '../snapshot';
 
 
 const RESUME_ROOTS = ['.resume-content', '.resume-box', '.geek-resume', 'main'];
 const SECTION_ROOTS = '.resume-item, .history-section, .section-item';
 const ITEM_ROOTS = ':scope .history-item, :scope .experience-item, :scope .item-content';
+const ITEM_MATCH_SELECTOR = '.history-item, .experience-item, .item-content';
 const HEADING_SELECTORS = ['h1', 'h2', 'h3', '.section-title', '.title'];
 
 const WORK_HEADINGS = new Set(['工作经历', '工作经验']);
@@ -54,9 +55,29 @@ function findResumeRoot(document: Document): Element | undefined {
 }
 
 
+function belongsToSection(element: Element, section: Element): boolean {
+  return element.closest(SECTION_ROOTS) === section;
+}
+
+
+function sectionHeadings(section: Element): string[] {
+  const headings = HEADING_SELECTORS.flatMap((selector) =>
+    Array.from(section.querySelectorAll(selector))
+      .filter((element) => belongsToSection(element, section) && !isHidden(element))
+      .map((element) => normalizeText(element.textContent, 160))
+      .filter(Boolean));
+
+  return [...new Set(headings)].slice(0, 50);
+}
+
+
 function visibleItems(section: Element): Element[] {
   return Array.from(section.querySelectorAll(ITEM_ROOTS))
-    .filter((item) => !isHidden(item));
+    .filter((item) => belongsToSection(item, section) && !isHidden(item))
+    .filter((item) => {
+      const ancestorItem = item.parentElement?.closest(ITEM_MATCH_SELECTOR);
+      return !ancestorItem || !belongsToSection(ancestorItem, section);
+    });
 }
 
 
@@ -111,7 +132,7 @@ export function parseResumeFrame(document: Document, now: Date): ParserSnapshot 
   const sections = Array.from(root.querySelectorAll(SECTION_ROOTS))
     .filter((section) => !isHidden(section));
   for (const section of sections) {
-    const headings = allTexts(section, HEADING_SELECTORS);
+    const headings = sectionHeadings(section);
     if (headings.some((heading) => WORK_HEADINGS.has(heading))) {
       const items = parseWorkSection(section);
       workExperiences.push(...items);

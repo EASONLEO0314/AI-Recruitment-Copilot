@@ -109,6 +109,22 @@ describe('recommend frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('uses a later visible field when an earlier same-selector match is hidden', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="card-list">
+        <article class="candidate-card-wrap">
+          <span class="name" hidden>隐藏姓名</span>
+          <span class="name">候选人可见</span>
+        </article>
+      </div>`);
+
+    const snapshot = parseRecommendFrame(document, capturedAt);
+
+    expect(snapshot.profile?.display_name).toBe('候选人可见');
+    expect(JSON.stringify(snapshot)).not.toContain('隐藏姓名');
+    expectNoPageOperations();
+  });
+
   it('ignores hidden candidate fields', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="card-list">

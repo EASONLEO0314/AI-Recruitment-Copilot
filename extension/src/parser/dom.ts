@@ -12,8 +12,10 @@ export function firstText(
   maxLength = 160,
 ): string | undefined {
   for (const selector of selectors) {
-    const element = root.querySelector(selector);
-    if (element && !isHidden(element)) {
+    for (const element of root.querySelectorAll(selector)) {
+      if (isHidden(element)) {
+        continue;
+      }
       const value = normalizeText(element.textContent, maxLength);
       if (value) {
         return value;
