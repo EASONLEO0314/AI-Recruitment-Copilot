@@ -3,6 +3,7 @@ import type {
   ApiRequestMessage,
   ApiRuntimeResponse,
 } from './contracts';
+import { routeParserMessage, type ParserMessageSender } from './parser/router';
 import { isRecord } from './validation';
 
 
@@ -77,12 +78,33 @@ export async function handleApiRequest(
 }
 
 
-if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (!isApiRequestMessage(message)) {
-      return false;
+export function createRuntimeMessageListener(
+  fetcher: Fetcher = fetch,
+  parserRouter: typeof routeParserMessage = routeParserMessage,
+) {
+  return (
+    message: unknown,
+    sender: ParserMessageSender,
+    sendResponse: (response: unknown) => void,
+  ): boolean => {
+    if (isApiRequestMessage(message)) {
+      void handleApiRequest(message, fetcher).then(sendResponse);
+      return true;
     }
-    void handleApiRequest(message).then(sendResponse);
-    return true;
-  });
+
+    if (typeof message === 'object' && message !== null) {
+      const messageType = (message as { type?: unknown }).type;
+      if (messageType === 'ARC_PARSER_SNAPSHOT' || messageType === 'ARC_PARSER_REFRESH') {
+        void parserRouter(message, sender).then((ok) => sendResponse({ ok }));
+        return true;
+      }
+    }
+
+    return false;
+  };
+}
+
+
+if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener(createRuntimeMessageListener());
 }
