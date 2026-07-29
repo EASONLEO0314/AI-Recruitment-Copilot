@@ -1,0 +1,112 @@
+# M2 BOSS 页面只读解析验证记录
+
+本文只记录已经观察到的事实。候选人 HTML、截图、姓名、电话、邮箱、简历正文和匿名 fixture 的字段值均不进入本文。
+
+## 记录元数据
+
+| 项目 | 事实 |
+|---|---|
+| 日期 | 2026-07-29 |
+| 分支 | `codex/m2-boss-frame-parser` |
+| 初始 baseline commit | `ddab5b9` |
+| 写文档前 HEAD | `15321cf` |
+| 初始 baseline 命令 | `npm.cmd run verify` |
+
+## 初始完整 baseline
+
+2026-07-29 在 commit `ddab5b9` 执行了完整 baseline：
+
+```powershell
+npm.cmd run verify
+```
+
+已观察结果：
+
+| 检查 | 结果 |
+|---|---|
+| backend | 12 passed，0 failed |
+| extension | 24 passed，0 failed |
+| TypeScript | typecheck exit 0 |
+| content build | `content.js` 208.73 kB，gzip 65.53 kB |
+| background build | `background.js` 1.29 kB，gzip 0.71 kB |
+
+这是进入 M2 实现前的完整 baseline，不是当前 M2 的最终闭合结果。
+
+## M2 主功能提交
+
+| Task | Commit | 已实现范围 |
+|---|---|---|
+| 1 | `f61a5bc` | 本地 parser 快照契约和严格校验 |
+| 2 | `1517997` | BOSS frame 页面分类和 frame-safe Manifest |
+| 3 | `2ccd042` | 可见候选人摘要与简历区域只读 adapter |
+| 4 | `00d9ea0` | 事件驱动协调器和仅顶层挂载的 bootstrap |
+| 5 | `505ca64` | 按 tab、frame、document 路由 parser 快照 |
+| 6 | `afb1a64` | 仅本地页面读取预览和人工重新读取入口 |
+
+## 分任务聚焦验证记录
+
+这些是本轮已经观察到的 focused test 和相应任务 typecheck 记录；它们不替代 Task 8 的最终完整闭合。
+
+| Task / 阶段 | 聚焦命令 | 已观察结果 |
+|---|---|---|
+| Task 1 初始实现 | `npm.cmd run test --workspace extension -- src/parser/snapshot.test.ts --run` | 9 passed；对应 typecheck exit 0 |
+| Task 2 初始实现与安全契约 | `npm.cmd run test --workspace extension -- src/parser/pageClassifier.test.ts src/manifest.test.ts --run` | 19 passed；对应 typecheck exit 0 |
+| Task 3 初始实现 | `npm.cmd run test --workspace extension -- src/parser/adapters/recommend.test.ts src/parser/adapters/resume.test.ts --run` | 8 passed |
+| Task 3 可见 root 修复 | `npm.cmd run test --workspace extension -- src/parser/adapters/resume.test.ts --run` | 5 passed |
+| Task 3 hidden-first / nested 修复 | `npm.cmd run test --workspace extension -- src/parser/adapters/recommend.test.ts src/parser/adapters/resume.test.ts --run` | 11 passed；Task 3 对应 typecheck exit 0 |
+| Task 4 初始实现 | `npm.cmd run test --workspace extension -- src/parser/coordinator.test.ts src/content.test.tsx --run` | 10 passed |
+| Task 4 root error 修复 | `npm.cmd run test --workspace extension -- src/parser/coordinator.test.ts --run` | 7 passed |
+| Task 4 observer / retry 修复 | `npm.cmd run test --workspace extension -- src/parser/coordinator.test.ts --run` | 10 passed；Task 4 对应 typecheck exit 0 |
+| Task 5 初始实现 | `npm.cmd run test --workspace extension -- src/parser/router.test.ts src/background.test.ts --run` | 26 passed |
+| Task 5 ACK / rejection 修复 | `npm.cmd run test --workspace extension -- src/parser/router.test.ts src/background.test.ts src/parser/coordinator.test.ts --run` | 39 passed；Task 5 对应 typecheck exit 0 |
+| Task 6 初始实现 | `npm.cmd run test --workspace extension -- src/parser/client.test.ts src/components/PageReadingCard.test.tsx src/components/CopilotPanel.test.tsx src/styles.test.ts --run` | 46 passed |
+| Task 6 watermark / coverage 修复 | `npm.cmd run test --workspace extension -- src/parser/client.test.ts src/components/PageReadingCard.test.tsx --run` | 31 passed；Task 6 对应 typecheck exit 0 |
+
+## 定向修复循环
+
+Task 7 写文档前已经使用 7 / 8 个 targeted repair rounds；如果 Task 8 发现新的独立问题，剩余第 8 轮可用于最小定向修复。同一审查批次发现的相关新证据可以记录在同一轮。
+
+| 轮次 / commit | 唯一问题指纹 | 新证据 | Root cause | Changed files | Focused command | 已观察结果 |
+|---|---|---|---|---|---|---|
+| 1 / `578cc03` | `vitest:manifest-frame-safety:incomplete-safety-contract:extension/src/manifest.test.ts` | Manifest 测试未完整锁定 BOSS frame 注入与最小权限边界。 | 安全契约断言覆盖不足，可能让后续权限或入口漂移不被聚焦测试发现。 | `extension/src/manifest.test.ts` | `npm.cmd run test --workspace extension -- src/parser/pageClassifier.test.ts src/manifest.test.ts --run` | 19 passed |
+| 2 / `9aeb2ef` | `vitest:resume-visible-root:hidden-root-selected:extension/src/parser/adapters/resume.ts` | 同类 resume root 同时存在时，隐藏 root 可能先于可见 root 被选中。 | root 选择只取首个 selector 命中项，没有先过滤可见性。 | `extension/src/parser/adapters/resume.test.ts`；`extension/src/parser/adapters/resume.ts` | `npm.cmd run test --workspace extension -- src/parser/adapters/resume.test.ts --run` | 5 passed |
+| 3 / `5f23a8a` | `vitest:adapter-root-selection:hidden-first-nested-duplicate:extension/src/parser/adapters/resume.ts` | hidden-first 结构和嵌套重复节点产生了新的字段重复或错误 root 证据。 | 可见性判断和嵌套 section 去重边界不足，adapter 会纳入隐藏或已由父节点覆盖的内容。 | `extension/src/parser/adapters/recommend.test.ts`；`extension/src/parser/adapters/resume.test.ts`；`extension/src/parser/adapters/resume.ts`；`extension/src/parser/dom.ts` | `npm.cmd run test --workspace extension -- src/parser/adapters/recommend.test.ts src/parser/adapters/resume.test.ts --run` | 11 passed |
+| 4 / `2001dff` | `vitest:coordinator-root-errors:async-root-rejection:extension/src/parser/coordinator.ts` | coordinator 的 root 解析失败没有稳定转化为可观察的安全 error snapshot。 | 异步 root 失败路径没有在协调器边界统一捕获和上报。 | `extension/src/parser/coordinator.test.ts`；`extension/src/parser/coordinator.ts` | `npm.cmd run test --workspace extension -- src/parser/coordinator.test.ts --run` | 7 passed |
+| 5 / `4f8087e` | `vitest:coordinator-observer-relay:stale-root-and-transport-drop:extension/src/parser/coordinator.ts` | Mutation evidence 显示内容 root 会变化；一次 transport 失败会丢失本应重试的最新快照。 | observer 绑定和 relay 状态没有同时处理 root 替换、selection attributes 变化及失败后的重试。 | `extension/src/parser/coordinator.test.ts`；`extension/src/parser/coordinator.ts` | `npm.cmd run test --workspace extension -- src/parser/coordinator.test.ts --run` | 10 passed |
+| 6 / `81306f2` | `vitest:parser-routing-ack:false-ack-and-rejection-accepted:extension/src/background.ts` | false ACK、background promise rejection 和 refresh rejection 会被当作成功或形成未处理拒绝。 | routing / relay 边界只覆盖同步返回，没有把 false ACK 与 rejected transport 统一视为失败并安全重试。 | `extension/src/background.test.ts`；`extension/src/background.ts`；`extension/src/parser/coordinator.test.ts`；`extension/src/parser/coordinator.ts`；`extension/src/parser/router.test.ts` | `npm.cmd run test --workspace extension -- src/parser/router.test.ts src/background.test.ts src/parser/coordinator.test.ts --run` | 39 passed |
+| 7 / `15321cf` | `vitest:preview-watermark-coverage:untrusted-status-and-section-denominator:extension/src/parser/client.ts` | 登录状态水印可能随不可信 snapshot 消失，section coverage 的分母也可能漏算核心区域。 | client 规范化和预览呈现没有把 logged-out 安全水印与核心 section coverage 作为不可降级边界。 | `extension/src/components/PageReadingCard.test.tsx`；`extension/src/components/PageReadingCard.tsx`；`extension/src/parser/client.test.ts`；`extension/src/parser/client.ts` | `npm.cmd run test --workspace extension -- src/parser/client.test.ts src/components/PageReadingCard.test.tsx --run` | 31 passed |
+
+## Task 8 最终完整闭合
+
+当前事实：Task 8 的最终命令 `npm.cmd run verify` 尚未执行，因此没有当前 M2 的完整测试计数、构建结果或最终闭合结果。初始 baseline 的 24 项扩展测试不能作为 M2 完成证据，分任务 focused 结果也不能替代这一闭合。
+
+## 未登录手工安全冒烟
+
+执行状态：未执行。
+
+- 已观察项目：0。
+- 未访问或控制 Chrome / BOSS 页面。
+- 未观察“一个悬浮窗”“BOSS 当前未登录”、重新读取、60 秒稳定性或 Network 行为。
+- 因此未登录 smoke 没有通过结果，也不能证明真实候选人字段准确率。
+
+## 登录后人工解析验收
+
+执行状态：未执行。
+
+- 样本数：0。
+- 准确率：未计算。
+- 尚无 `work_experience`、`education`、`projects`、`skills` 或 `experience_years` 的字段级 pass / partial / fail / not_present 记录。
+- 尚无自动操作、自动刷新或 stale candidate 的人工观察结果。
+
+## 数据记录边界
+
+后续 Task 8 只允许记录匿名 `sample_id`、字段级结果、自动行为观察和汇总准确率；不记录真实字段值，不保存任何真实候选人 HTML、截图、姓名、电话、邮箱或简历正文。
+
+## 明确延期
+
+- LLM 评分、证据分析和话术生成。
+- 正式候选人评估与 92% 演示评估替换。
+- SQLite 或其他持久化。
+- 阿里云部署、HTTPS 服务端鉴权和跨平台交付。
+- 账号、权限和多人协作。
+- 自动点击、滚动、导航、打开候选人、翻页、输入、采集或发送消息。
