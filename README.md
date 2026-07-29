@@ -3,8 +3,8 @@
 AI Recruitment Copilot 是一个本地优先的招聘辅助工具。当前事实状态如下：
 
 - M1 代码、自动验证和 Chrome 人工验收已通过。
-- M2 本地只读 BOSS 页面解析代码和分任务定向自动验证已实现。
-- M2 的 Task 8 完整自动闭合、未登录安全冒烟，以及登录后的至少 5 个样本 / 95% 核心字段准确率验收均尚未执行。因此当前不得称 M2 完成。
+- M2 本地只读 BOSS 页面解析代码、分任务定向验证和 Task 8 自动闭合已完成。
+- M2 的未登录安全冒烟，以及登录后的至少 5 个样本 / 95% 核心字段准确率验收尚未执行。因此当前不得称 M2 完成。
 
 > M2 只读取当前账号已获授权页面中已经渲染的 DOM。它不使用 LLM，不拦截网络，不调用 BOSS 私有 API，也不自动点击、滚动、导航、填写或发送。页面读取预览仅本地展示；现有 `92%` 评估仍是明确标注的演示数据，不由 BOSS 页面资料生成。
 
@@ -178,7 +178,7 @@ npm.cmd run build:extension
 
 初始完整 baseline 的事实记录是 2026-07-29、commit `ddab5b9`：执行 `npm.cmd run verify`，后端 12 项、扩展 24 项通过，TypeScript 类型检查和双入口生产构建通过。该 24 项扩展测试是进入 M2 前的 baseline，不是当前 M2 的最终闭合结果。
 
-M2 当前只有各任务的 focused test 和对应类型检查通过记录。Task 8 的最终 `npm.cmd run verify` 尚未执行，因此没有当前 M2 全量测试计数或最终构建结果，也不能用旧 baseline 声称 M2 已完成。详细事实见 [`docs/validation/m2-loop-log.md`](docs/validation/m2-loop-log.md)。
+M2 的 post-repair Task 8 final closure 已执行：`npm.cmd run verify` exit 0，后端 12 项、扩展 135 项通过，TypeScript 类型检查通过；`content.js` 为 226.53 kB（gzip 70.74 kB），`background.js` 为 3.96 kB（gzip 1.68 kB）。pre-repair closure 的解释器发现失败、第 8 轮修复及全部命令事实见 [`docs/validation/m2-loop-log.md`](docs/validation/m2-loop-log.md)。这只证明自动验证闭合，不替代未登录与登录后人工验收。
 
 ## 当前已实现的代码范围
 
@@ -188,7 +188,7 @@ M1 已实现并通过 Chrome 人工验收：
 - Chrome Manifest V3 双入口构建、本机 Service Worker 网络代理和 Shadow DOM 悬浮窗。
 - 在线、连接中、离线、重试、证据展开、话术切换及手动复制。
 
-M2 已实现但尚待 Task 8 完整验收：
+M2 已实现并通过自动验证，但仍待 Task 8 两阶段人工验收：
 
 - 本地只读、frame-aware 的 BOSS 页面分类器和 DOM parser。
 - 已渲染候选人摘要、工作经历、教育经历、项目经历、技能和基本年限信息的白名单结构化读取。

@@ -75,6 +75,7 @@ Task 7 写文档前已经使用 7 / 8 个 targeted repair rounds；如果 Task 8
 | 5 / `4f8087e` | `vitest:coordinator-observer-relay:attribute-mutation-and-retry-dedupe:extension/src/parser/coordinator.ts` | 同一审查批次出现两个新 finding：`active` / `is-active` 的 class 或 `aria-selected` 只发生属性变化时未触发 observer；`sendMessage` rejection 前 dedupe key 已提交，使相同内容不能重试。 | observer 缺少 `attributes` 和相应 `attributeFilter`；dedupe 没有分离 successful key 与 inflight key。 | `extension/src/parser/coordinator.test.ts`；`extension/src/parser/coordinator.ts` | `npm.cmd run test --workspace extension -- src/parser/coordinator.test.ts --run` | 10 passed |
 | 6 / `81306f2` | `vitest:parser-routing-ack:false-ack-and-rejection-accepted:extension/src/background.ts` | false ACK、background promise rejection 和 refresh rejection 会被当作成功或形成未处理拒绝。 | routing / relay 边界只覆盖同步返回，没有把 false ACK 与 rejected transport 统一视为失败并安全重试。 | `extension/src/background.test.ts`；`extension/src/background.ts`；`extension/src/parser/coordinator.test.ts`；`extension/src/parser/coordinator.ts`；`extension/src/parser/router.test.ts` | `npm.cmd run test --workspace extension -- src/parser/router.test.ts src/background.test.ts src/parser/coordinator.test.ts --run` | 39 passed |
 | 7 / `15321cf` | `vitest:parser-client:logged-out-watermark-regression:extension/src/parser/client.ts`<br>`vitest:page-reading-card:core-field-coverage-missing:extension/src/components/PageReadingCard.tsx` | 两个新 finding：candidate `t2` 后接受更旧的 logged-out `t1` 作为安全状态时，delayed / equal candidate `t2` 存在恢复候选人预览的风险；UI 没有显示五个 core fields 的覆盖率。 | relay 选择只比较当前显示项的 `captured_at`，接受旧 logged-out 后会丢失已经观察到的最大 candidate 时间，需要保留 watermark 并只允许真正更新的 candidate 恢复；PageReadingCard 没有按五个 core fields 计算和呈现覆盖率。 | `extension/src/components/PageReadingCard.test.tsx`；`extension/src/components/PageReadingCard.tsx`；`extension/src/parser/client.test.ts`；`extension/src/parser/client.ts` | `npm.cmd run test --workspace extension -- src/parser/client.test.ts src/components/PageReadingCard.test.tsx --run` | 31 passed |
+| 8 / `d48594a` | `cmd:python-runtime-discovery:py-launcher-unregistered:scripts/python.cmd` | pre-repair closure 在 backend 启动前输出 `No installed Python found!`；`py -0p` 同样没有发现已安装解释器，但 `%LocalAppData%/Programs/Python/Python314/python.exe` 与工作树 venv 依赖实际存在。 | 启动脚本只调用 `py -3.14`，没有在 Windows Python launcher 未注册解释器时回退到已安装 runtime。 | `scripts/python.cmd` | `scripts\python.cmd --version`；`npm.cmd run test:backend`；受控 exit code 透传检查 | Python 3.14.6；12 passed；实际 `$LASTEXITCODE` 为 7 |
 
 ## Task 8 最终完整闭合
 
@@ -88,17 +89,17 @@ Task 7 写文档前已经使用 7 / 8 个 targeted repair rounds；如果 Task 8
 | `npm.cmd run typecheck:extension` | 0 | `tsc --noEmit` 无错误 |
 | `npm.cmd run build:extension` | 0 | `content.js` 226.53 kB、gzip 70.74 kB；`background.js` 3.96 kB、gzip 1.68 kB |
 
-生产代码安全扫描按计划执行一次。`rg` exit code 为 1 且无输出，表示在 `extension/src/parser` 与 `extension/src/content.tsx` 的非测试文件中没有匹配 `chrome.debugger`、`fetch(`、`.click(`、`.focus(`、`scrollTo(`、指定 `location` 导航、`innerHTML`、`outerHTML`、Cookie、storage 或 debug log。没有发现新的明确问题，因此没有使用第 8 轮定向修复；修复循环仍为 7 / 8。
+生产代码安全扫描按计划执行一次。`rg` exit code 为 1 且无输出，表示在 `extension/src/parser` 与 `extension/src/content.tsx` 的非测试文件中没有匹配 `chrome.debugger`、`fetch(`、`.click(`、`.focus(`、`scrollTo(`、指定 `location` 导航、`innerHTML`、`outerHTML`、Cookie、storage 或 debug log。baseline 与扫描没有发现新问题；随后 pre-repair closure 暴露了解释器发现问题，并使用第 8 轮完成最小修复。修复循环最终为 8 / 8。
 
-### 最终 closure
+### Pre-repair closure attempt
 
-最终命令按计划只执行一次：
+首次 closure attempt 执行：
 
 ```powershell
 npm.cmd run verify
 ```
 
-已观察结果：exit code 1。命令在第一步 `scripts\python.cmd -m pytest backend/tests -q` 终止，输出 `No installed Python found!`；由于命令使用 `&&` 串联，本次 closure 内的 extension tests、typecheck 和 build 均未执行。因此当前 M2 没有完整闭合通过结果。
+已观察结果：exit code 1。命令在第一步 `scripts\python.cmd -m pytest backend/tests -q` 终止，输出 `No installed Python found!`；由于命令使用 `&&` 串联，本次 attempt 内的 extension tests、typecheck 和 build 均未执行。此失败事实没有被后续结果覆盖或删除。
 
 只读诊断与聚焦验证事实：
 
@@ -106,16 +107,44 @@ npm.cmd run verify
 - Python 3.14.6 基础解释器与工作树 `.venv` 均存在；直接使用基础解释器但不提供 venv 依赖时，`python -m pytest` exit code 1，输出 `No module named pytest`。
 - 将工作树 `.venv/Lib/site-packages` 作为 `PYTHONPATH` 后，使用同一基础解释器运行 `backend/tests -q` exit code 0，12 passed，0 failed。这证明该次失败发生在 `scripts/python.cmd` 的解释器发现边界，不能证明完整 `verify` 已通过。
 
+第 8 轮仅修改 `scripts/python.cmd`：先用无副作用命令探测 `py -3.14`，不可用时回退到 `%LocalAppData%/Programs/Python/Python314/python.exe`，同时保留原有 venv `PYTHONPATH`。解释器一经选择，只执行一次传入命令并透传退出码；找不到 runtime 时明确返回非零。
+
+聚焦验证：
+
+| 命令 | Exit code | 已观察结果 |
+|---|---:|---|
+| `scripts\python.cmd --version` | 0 | `Python 3.14.6` |
+| `npm.cmd run test:backend` | 0 | 12 passed，0 failed |
+| `scripts\python.cmd -c "import sys; sys.exit(7)"` | 7 | PowerShell `$LASTEXITCODE` 观察为 7；未回退重跑 |
+
+### Post-repair final closure
+
+修复提交 `d48594a` 后，final closure 执行一次：
+
+```powershell
+npm.cmd run verify
+```
+
+已观察结果：exit code 0。
+
+| 检查 | 已观察结果 |
+|---|---|
+| backend | 12 passed，0 failed |
+| extension | 14 个 test files、135 tests passed，0 failed |
+| TypeScript | `tsc --noEmit` exit 0 |
+| content build | `content.js` 226.53 kB，gzip 70.74 kB |
+| background build | `background.js` 3.96 kB，gzip 1.68 kB |
+
 ### 构建 Manifest 检查
 
-读取 baseline build 生成的 `extension/dist/manifest.json`，命令 exit code 0，观察到：
+读取 post-repair final closure 生成的 `extension/dist/manifest.json`，命令 exit code 0，观察到：
 
 - content script 只有 `content.js`，`all_frames` 为 `true`；
 - matches 为 `https://www.zhipin.com/*` 与 `http://127.0.0.1/*`；
 - permissions 为 `clipboardWrite`、`storage`，不含 `debugger` 或 `scripting`；
 - host permissions 只有 `http://127.0.0.1:8765/*`。
 
-当前自动验证状态：extension baseline 通过；backend 聚焦测试通过；完整 `npm.cmd run verify` 未通过。未登录 Chrome smoke 与登录后人工验收仍未执行，不能宣称 M2 完成。
+当前自动验证状态：post-repair final closure 通过；未登录 Chrome smoke 与登录后人工验收仍未执行，不能宣称 M2 完成。
 
 ## 未登录手工安全冒烟
 
