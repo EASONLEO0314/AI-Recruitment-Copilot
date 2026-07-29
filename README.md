@@ -107,7 +107,7 @@ npm.cmd run typecheck:extension
 npm.cmd run build:extension
 ```
 
-最近一次完整自动验证记录为 2026-07-29：后端 12 项测试通过，扩展 23 项测试通过，TypeScript 类型检查和 `content.js` / `background.js` 双入口构建通过。自动验证不替代前述尚未完成的真实 Chrome 人工验收。
+最近一次完整自动验证记录为 2026-07-29：后端 12 项测试通过，扩展 24 项测试通过，TypeScript 类型检查和 `content.js` / `background.js` 双入口构建通过。自动验证不替代前述尚未完成的真实 Chrome 人工验收。
 
 ## M1 当前已实现的代码范围（人工验收待执行）
 

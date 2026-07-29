@@ -188,6 +188,10 @@ describe('CopilotPanel', () => {
     await user.click(screen.getByRole('tab', { name: '邀约面试话术' }));
     expect(screen.getByText('想邀请您参加一次线上交流。')).toBeInTheDocument();
     expect(writeText).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('tab', { name: '电话沟通提纲' }));
+    expect(screen.getByText('先介绍岗位，再了解项目经验。')).toBeInTheDocument();
+    expect(writeText).not.toHaveBeenCalled();
   });
 
   it('copies the active message only after an explicit click', async () => {

@@ -546,14 +546,22 @@ button {
 }
 
 .arc-tabs button {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-height: 44px;
   margin-bottom: -1px;
   padding: 8px 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
   color: var(--arc-muted);
   font-size: 10px;
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .arc-tabs button[aria-selected="true"] {
