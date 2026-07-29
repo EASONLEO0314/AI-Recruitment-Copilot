@@ -131,11 +131,25 @@ M1 Chrome 人工验收已有事实记录且已通过。README 只保留可重复
 
 - [ ] 用户手动登录 BOSS，并明确授权本轮人工验收。
 - [ ] 用户打开至少 5 个其有权查看的候选人页面。
-- [ ] 每个页面只记录匿名 `sample_id`，以及字段级 `pass` / `partial` / `fail` / `not_present`。
+- [ ] 每个页面只按下方模板记录匿名 `sample_id` 和字段级结果。
 - [ ] 每个样本核对 `work_experience`、`education`、`projects`、`skills` 和 `experience_years`。
 - [ ] 全程没有自动点击、滚动、导航、输入或消息动作，没有扩展导致的自动刷新，也没有上一候选人的 stale 数据。
 - [ ] 按 `正确的 present core fields / 全部 present core fields` 计算准确率，至少 5 个样本的汇总结果达到 `95%` 或更高。
 - [ ] 不记录真实字段值，不保存候选人 HTML、截图、姓名、电话、邮箱或简历正文。
+
+每个样本使用以下空白模板；`sample_id` 只使用匿名编号，不预填或记录任何真实字段值：
+
+```text
+sample_id: anonymous-<序号>
+refresh_observed: yes|no
+stale_candidate_observed: yes|no
+work_experience: pass|partial|fail|not_present
+education: pass|partial|fail|not_present
+projects: pass|partial|fail|not_present
+skills: pass|partial|fail|not_present
+experience_years: pass|partial|fail|not_present
+unsupported_message_correct: pass|not_applicable
+```
 
 ## 自动验证
 
