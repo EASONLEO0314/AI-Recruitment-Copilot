@@ -6,6 +6,22 @@ import { isParserSnapshot, isRecord } from '../validation';
 
 
 const REFRESH_REQUEST: ParserRefreshRequest = { type: 'ARC_PARSER_REFRESH' };
+const relayWatermarks = new WeakMap<ParserRelayMessage, number>();
+
+
+function capturedTime(relay: ParserRelayMessage): number {
+  return Date.parse(relay.snapshot.captured_at);
+}
+
+
+function watermark(relay: ParserRelayMessage): number {
+  return Math.max(capturedTime(relay), relayWatermarks.get(relay) ?? Number.NEGATIVE_INFINITY);
+}
+
+
+function markWatermark(relay: ParserRelayMessage, value: number): void {
+  relayWatermarks.set(relay, Math.max(capturedTime(relay), value));
+}
 
 
 function defaultRuntime(): typeof chrome.runtime | undefined {
@@ -43,11 +59,20 @@ export function acceptParserRelay(
   current: ParserRelayMessage | null,
   incoming: ParserRelayMessage,
 ): ParserRelayMessage {
-  if (!current || incoming.snapshot.page_kind === 'logged_out') {
+  const incomingTime = capturedTime(incoming);
+  if (!current) {
+    markWatermark(incoming, incomingTime);
     return incoming;
   }
 
-  if (Date.parse(incoming.snapshot.captured_at) < Date.parse(current.snapshot.captured_at)) {
+  const currentWatermark = watermark(current);
+  if (incoming.snapshot.page_kind === 'logged_out') {
+    markWatermark(incoming, Math.max(currentWatermark, incomingTime));
+    return incoming;
+  }
+
+  if (incomingTime < currentWatermark
+    || (current.snapshot.page_kind === 'logged_out' && incomingTime <= currentWatermark)) {
     return current;
   }
 
@@ -56,7 +81,13 @@ export function acceptParserRelay(
   const incomingIsShell = incoming.snapshot.page_kind === 'non_candidate'
     || incoming.snapshot.page_kind === 'unsupported';
 
-  return currentIsCandidate && incomingIsShell ? current : incoming;
+  if (currentIsCandidate && incomingIsShell) {
+    markWatermark(current, Math.max(currentWatermark, incomingTime));
+    return current;
+  }
+
+  markWatermark(incoming, Math.max(currentWatermark, incomingTime));
+  return incoming;
 }
 
 

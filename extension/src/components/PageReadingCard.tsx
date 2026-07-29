@@ -16,9 +16,21 @@ const MISSING_FIELD_LABELS: Readonly<Record<string, string>> = {
   experience_years: '工作年限',
 };
 
+const CORE_PROFILE_FIELDS = new Set([
+  'work_experiences',
+  'education',
+  'project_experiences',
+  'skills',
+  'experience_years',
+]);
+
 
 function ProfileReading({ snapshot }: { snapshot: ParserSnapshot }) {
   const profile = snapshot.profile;
+  const presentCoreFields = new Set(
+    snapshot.present_fields.filter((field) => CORE_PROFILE_FIELDS.has(field)),
+  );
+  const coverage = Math.round((presentCoreFields.size / CORE_PROFILE_FIELDS.size) * 100);
   const missingLabels = snapshot.missing_fields
     .map((field) => MISSING_FIELD_LABELS[field])
     .filter((label): label is string => Boolean(label));
@@ -43,6 +55,8 @@ function ProfileReading({ snapshot }: { snapshot: ParserSnapshot }) {
         <span>教育 {profile?.education.length ?? 0}</span>
         <span>项目 {profile?.project_experiences.length ?? 0}</span>
       </div>
+
+      <span>字段覆盖率 {coverage}%</span>
 
       {profile && profile.skills.length > 0 && (
         <div className="arc-reading__skills" aria-label="候选人技能">

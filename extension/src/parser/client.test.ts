@@ -127,6 +127,24 @@ describe('parser relay acceptance', () => {
     expect(acceptParserRelay(candidate, newerCandidate)).toBe(newerCandidate);
     expect(acceptParserRelay(null, candidate)).toBe(candidate);
   });
+
+  it('keeps a logged-out safety watermark until a truly newer candidate arrives', () => {
+    const candidateAtTwo = relay('recommend_frame', 'ready', '2026-07-29T02:00:02.000Z');
+    const loggedOutAtOne = relay('logged_out', 'ready', '2026-07-29T02:00:01.000Z');
+    const delayedCandidateAtTwo = relay('resume_frame', 'ready', '2026-07-29T02:00:02.000Z');
+    const candidateAtThree = relay('resume_frame', 'ready', '2026-07-29T02:00:03.000Z');
+
+    let current = acceptParserRelay(null, candidateAtTwo);
+    current = acceptParserRelay(current, loggedOutAtOne);
+    expect(current).toBe(loggedOutAtOne);
+    expect(current.snapshot.captured_at).toBe('2026-07-29T02:00:01.000Z');
+
+    current = acceptParserRelay(current, delayedCandidateAtTwo);
+    expect(current).toBe(loggedOutAtOne);
+
+    current = acceptParserRelay(current, candidateAtThree);
+    expect(current).toBe(candidateAtThree);
+  });
 });
 
 

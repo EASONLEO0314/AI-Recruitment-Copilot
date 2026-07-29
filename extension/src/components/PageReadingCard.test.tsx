@@ -14,16 +14,19 @@ const loggedOutSnapshot = buildStatusSnapshot(
   undefined,
   capturedAt,
 );
-const partialSnapshot = buildProfileSnapshot('resume_frame', {
+const partialSnapshotBase = buildProfileSnapshot('resume_frame', {
   display_name: '候选人甲',
   current_title: '平台工程师',
   location: '上海',
-  experience_years: 3,
-  education: [{ school: '示例大学' }],
+  education: [],
   work_experiences: [],
-  project_experiences: [{ name: '匿名项目' }],
+  project_experiences: [],
   skills: ['TypeScript', 'React'],
 }, capturedAt);
+const partialSnapshot = {
+  ...partialSnapshotBase,
+  present_fields: [...partialSnapshotBase.present_fields, 'skills'],
+};
 const readySnapshot = buildProfileSnapshot('recommend_frame', {
   current_title: '算法工程师',
   experience_years: 0,
@@ -63,13 +66,13 @@ describe('PageReadingCard', () => {
     expect(screen.getByText('候选人甲')).toBeInTheDocument();
     expect(screen.getByText('平台工程师')).toBeInTheDocument();
     expect(screen.getByText('上海')).toBeInTheDocument();
-    expect(screen.getByText('3 年经验')).toBeInTheDocument();
     expect(screen.getByText('工作 0')).toBeInTheDocument();
-    expect(screen.getByText('教育 1')).toBeInTheDocument();
-    expect(screen.getByText('项目 1')).toBeInTheDocument();
+    expect(screen.getByText('教育 0')).toBeInTheDocument();
+    expect(screen.getByText('项目 0')).toBeInTheDocument();
     expect(screen.getByText('TypeScript')).toBeInTheDocument();
     expect(screen.getByText('React')).toBeInTheDocument();
     expect(screen.getByText(/缺少：工作经历/)).toBeInTheDocument();
+    expect(screen.getByText('字段覆盖率 20%')).toBeInTheDocument();
     expect(screen.getByText(/boss-dom-v1/)).toBeInTheDocument();
     expect(screen.getByText(/读取于/)).toBeInTheDocument();
     expect(screen.queryByText('真实评估')).not.toBeInTheDocument();
@@ -82,6 +85,7 @@ describe('PageReadingCard', () => {
 
     expect(screen.getByText('当前候选人')).toBeInTheDocument();
     expect(screen.getByText('0 年经验')).toBeInTheDocument();
+    expect(screen.getByText('字段覆盖率 100%')).toBeInTheDocument();
     expect(screen.queryByText(/缺少：/)).not.toBeInTheDocument();
   });
 
@@ -106,6 +110,7 @@ describe('PageReadingCard', () => {
 
       expect(screen.getByText(expected)).toBeInTheDocument();
       expect(screen.queryByText('候选人甲')).not.toBeInTheDocument();
+      expect(screen.queryByText(/字段覆盖率/)).not.toBeInTheDocument();
     },
   );
 
