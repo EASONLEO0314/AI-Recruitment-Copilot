@@ -44,8 +44,9 @@ const LOCATION_EXCLUSIONS = /年|学历|本科|硕士|博士|大专/;
 
 function findResumeRoot(document: Document): Element | undefined {
   for (const selector of RESUME_ROOTS) {
-    const root = document.querySelector(selector);
-    if (root && !isHidden(root)) {
+    const root = Array.from(document.querySelectorAll(selector))
+      .find((element) => !isHidden(element));
+    if (root) {
       return root;
     }
   }

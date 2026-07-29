@@ -109,6 +109,26 @@ describe('resume frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('skips a hidden resume root before a visible root with the same selector', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="resume-content" hidden>
+        <h1 class="resume-name">不应读取的姓名</h1>
+        <span class="skill-label">不应读取的技能</span>
+      </div>
+      <div class="resume-content">
+        <h1 class="resume-name">候选人丁</h1>
+        <span class="skill-label">Rust</span>
+      </div>`);
+
+    const snapshot = parseResumeFrame(document, capturedAt);
+
+    expect(snapshot.status).not.toBe('unsupported');
+    expect(snapshot.profile?.display_name).toBe('候选人丁');
+    expect(snapshot.profile?.skills).toEqual(['Rust']);
+    expect(JSON.stringify(snapshot)).not.toContain('不应读取');
+    expectNoPageOperations();
+  });
+
   it('warns when recognized sections have no known structured child fields', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="resume-box">
