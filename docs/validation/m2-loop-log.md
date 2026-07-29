@@ -78,7 +78,44 @@ Task 7 写文档前已经使用 7 / 8 个 targeted repair rounds；如果 Task 8
 
 ## Task 8 最终完整闭合
 
-当前事实：Task 8 的最终命令 `npm.cmd run verify` 尚未执行，因此没有当前 M2 的完整测试计数、构建结果或最终闭合结果。初始 baseline 的 24 项扩展测试不能作为 M2 完成证据，分任务 focused 结果也不能替代这一闭合。
+### 自动 baseline
+
+2026-07-29 在 commit `c211e82` 按顺序各执行一次：
+
+| 命令 | Exit code | 已观察结果 |
+|---|---:|---|
+| `npm.cmd run test:extension` | 0 | 14 个 test files、135 tests passed，0 failed |
+| `npm.cmd run typecheck:extension` | 0 | `tsc --noEmit` 无错误 |
+| `npm.cmd run build:extension` | 0 | `content.js` 226.53 kB、gzip 70.74 kB；`background.js` 3.96 kB、gzip 1.68 kB |
+
+生产代码安全扫描按计划执行一次。`rg` exit code 为 1 且无输出，表示在 `extension/src/parser` 与 `extension/src/content.tsx` 的非测试文件中没有匹配 `chrome.debugger`、`fetch(`、`.click(`、`.focus(`、`scrollTo(`、指定 `location` 导航、`innerHTML`、`outerHTML`、Cookie、storage 或 debug log。没有发现新的明确问题，因此没有使用第 8 轮定向修复；修复循环仍为 7 / 8。
+
+### 最终 closure
+
+最终命令按计划只执行一次：
+
+```powershell
+npm.cmd run verify
+```
+
+已观察结果：exit code 1。命令在第一步 `scripts\python.cmd -m pytest backend/tests -q` 终止，输出 `No installed Python found!`；由于命令使用 `&&` 串联，本次 closure 内的 extension tests、typecheck 和 build 均未执行。因此当前 M2 没有完整闭合通过结果。
+
+只读诊断与聚焦验证事实：
+
+- `scripts/python.cmd` 固定调用 `py -3.14`；`py -0p` exit code 1，输出 `No installed Pythons found!`。
+- Python 3.14.6 基础解释器与工作树 `.venv` 均存在；直接使用基础解释器但不提供 venv 依赖时，`python -m pytest` exit code 1，输出 `No module named pytest`。
+- 将工作树 `.venv/Lib/site-packages` 作为 `PYTHONPATH` 后，使用同一基础解释器运行 `backend/tests -q` exit code 0，12 passed，0 failed。这证明该次失败发生在 `scripts/python.cmd` 的解释器发现边界，不能证明完整 `verify` 已通过。
+
+### 构建 Manifest 检查
+
+读取 baseline build 生成的 `extension/dist/manifest.json`，命令 exit code 0，观察到：
+
+- content script 只有 `content.js`，`all_frames` 为 `true`；
+- matches 为 `https://www.zhipin.com/*` 与 `http://127.0.0.1/*`；
+- permissions 为 `clipboardWrite`、`storage`，不含 `debugger` 或 `scripting`；
+- host permissions 只有 `http://127.0.0.1:8765/*`。
+
+当前自动验证状态：extension baseline 通过；backend 聚焦测试通过；完整 `npm.cmd run verify` 未通过。未登录 Chrome smoke 与登录后人工验收仍未执行，不能宣称 M2 完成。
 
 ## 未登录手工安全冒烟
 
