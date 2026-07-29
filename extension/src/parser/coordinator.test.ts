@@ -68,6 +68,24 @@ function setRecommendFixture(): Element {
 }
 
 
+function createDeferred() {
+  let resolve!: (value: unknown) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<unknown>((nextResolve, nextReject) => {
+    resolve = nextResolve;
+    reject = nextReject;
+  });
+
+  return { promise, reject, resolve };
+}
+
+
+async function flushMicrotasks(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
+
 describe('parser coordinator', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -111,9 +129,12 @@ describe('parser coordinator', () => {
       childList: true,
       subtree: true,
       characterData: true,
+      attributes: true,
+      attributeFilter: ['class', 'aria-selected', 'hidden', 'aria-hidden'],
     });
 
     FakeObserver.instances[0].emit();
+    vi.advanceTimersByTime(300);
     FakeObserver.instances[0].emit();
     vi.advanceTimersByTime(399);
     expect(now).toHaveBeenCalledTimes(1);
@@ -133,6 +154,40 @@ describe('parser coordinator', () => {
     handle.stop();
     handle.stop();
     expect(FakeObserver.instances[0].disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('reparses when active-card markers switch without structural or text changes', () => {
+    document.body.innerHTML = `
+      <section class="card-list">
+        <article class="candidate-card-wrap active">
+          <span class="name">匿名候选人甲</span>
+        </article>
+        <article class="candidate-card-wrap">
+          <span class="name">匿名候选人乙</span>
+        </article>
+      </section>`;
+    const cards = document.querySelectorAll('.candidate-card-wrap');
+    const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/web/frame/recommend',
+      isTopFrame: false,
+      sendMessage,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+    });
+
+    expect(sendMessage.mock.calls[0][0].snapshot.profile?.display_name)
+      .toBe('匿名候选人甲');
+    cards[0].classList.remove('active');
+    cards[1].setAttribute('aria-selected', 'true');
+    FakeObserver.instances[0].emit();
+    vi.advanceTimersByTime(400);
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls[1][0].snapshot.profile?.display_name)
+      .toBe('匿名候选人乙');
   });
 
   it('forces an unchanged snapshot on the exact refresh command and removes the listener on stop', () => {
@@ -317,5 +372,62 @@ describe('parser coordinator', () => {
     await Promise.resolve();
     expect(sendMessage).toHaveBeenCalledOnce();
     expect(JSON.stringify(sendMessage.mock.calls[0][0])).not.toContain('network detail');
+  });
+
+  it('retries an unchanged snapshot after the previous transport rejects', async () => {
+    setRecommendFixture();
+    const sendMessage = vi.fn()
+      .mockRejectedValueOnce(new Error('transient relay failure'))
+      .mockResolvedValueOnce(undefined);
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/web/frame/recommend',
+      isTopFrame: false,
+      sendMessage,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+    });
+    await flushMicrotasks();
+
+    FakeObserver.instances[0].emit();
+    vi.advanceTimersByTime(400);
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls[1][0].snapshot.profile?.display_name)
+      .toBe('匿名候选人');
+    await flushMicrotasks();
+  });
+
+  it('does not let an older relay success replace a newer successful key', async () => {
+    setRecommendFixture();
+    const olderRelay = createDeferred();
+    const newerRelay = createDeferred();
+    const sendMessage = vi.fn()
+      .mockImplementationOnce(() => olderRelay.promise)
+      .mockImplementationOnce(() => newerRelay.promise);
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/web/frame/recommend',
+      isTopFrame: false,
+      sendMessage,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+    });
+
+    document.querySelector('.candidate-card-wrap .name')!.textContent = '匿名候选人乙';
+    FakeObserver.instances[0].emit();
+    vi.advanceTimersByTime(400);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+
+    newerRelay.resolve(undefined);
+    await flushMicrotasks();
+    olderRelay.resolve(undefined);
+    await flushMicrotasks();
+
+    FakeObserver.instances[0].emit();
+    vi.advanceTimersByTime(400);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 });

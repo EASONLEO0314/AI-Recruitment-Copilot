@@ -123,29 +123,60 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let observer: MutationObserver | undefined;
-  let lastDedupeKey: string | undefined;
+  let lastSuccessfulKey: string | undefined;
+  let nextSendSequence = 0;
+  let lastSuccessfulSequence = 0;
+  const inFlightByKey = new Map<string, number>();
 
-  const sendSnapshot = (snapshot: ParserSnapshot): void => {
+  const decrementInFlight = (key: string): void => {
+    const nextCount = (inFlightByKey.get(key) ?? 1) - 1;
+    if (nextCount === 0) {
+      inFlightByKey.delete(key);
+    } else {
+      inFlightByKey.set(key, nextCount);
+    }
+  };
+
+  const sendSnapshot = (snapshot: ParserSnapshot, key: string): void => {
     const message: ParserSnapshotMessage = {
       type: 'ARC_PARSER_SNAPSHOT',
       snapshot,
     };
+    const sequence = ++nextSendSequence;
+    inFlightByKey.set(key, (inFlightByKey.get(key) ?? 0) + 1);
 
     try {
-      void sendMessage(message).catch(() => undefined);
+      void sendMessage(message).then(
+        () => {
+          decrementInFlight(key);
+          if (sequence >= lastSuccessfulSequence) {
+            lastSuccessfulKey = key;
+            lastSuccessfulSequence = sequence;
+          }
+        },
+        () => {
+          decrementInFlight(key);
+        },
+      );
     } catch {
+      decrementInFlight(key);
       // Runtime transport failures must not alter or leak into parser snapshots.
     }
   };
 
   const emitSnapshot = (snapshot: ParserSnapshot, force = false): void => {
     const nextDedupeKey = dedupeKey(snapshot);
-    if (!force && nextDedupeKey === lastDedupeKey) {
+    if (
+      !force
+      && (
+        nextDedupeKey === lastSuccessfulKey
+        || (inFlightByKey.get(nextDedupeKey) ?? 0) > 0
+      )
+    ) {
       return;
     }
 
-    lastDedupeKey = nextDedupeKey;
-    sendSnapshot(snapshot);
+    sendSnapshot(snapshot, nextDedupeKey);
   };
 
   const run = (force = false): void => {
@@ -203,6 +234,8 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
       childList: true,
       subtree: true,
       characterData: true,
+      attributes: true,
+      attributeFilter: ['class', 'aria-selected', 'hidden', 'aria-hidden'],
     });
   }
 
