@@ -147,6 +147,27 @@ button {
   white-space: nowrap;
 }
 
+.arc-toolbar .arc-connection {
+  min-width: max-content;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.arc-refresh-button {
+  min-height: 24px;
+  padding: 2px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--arc-teal-dark);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.arc-refresh-button:hover {
+  text-decoration: underline;
+}
+
 .arc-eyebrow {
   color: var(--arc-muted);
   font-size: 10px;

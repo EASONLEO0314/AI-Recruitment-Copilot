@@ -65,6 +65,11 @@ export function CopilotPanel() {
   const copyFeedbackTimer = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
 
   const connect = useCallback(async () => {
+    if (copyFeedbackTimer.current !== null) {
+      globalThis.clearTimeout(copyFeedbackTimer.current);
+      copyFeedbackTimer.current = null;
+    }
+    setCopyFeedback('');
     setConnection('connecting');
     setAssessment(null);
     try {
@@ -150,7 +155,18 @@ export function CopilotPanel() {
           <span className="arc-eyebrow">当前岗位</span>
           <strong>{assessment?.job_title ?? 'AI4S 工程师（演示岗位）'}</strong>
         </div>
-        <ConnectionPill state={connection} />
+        <div className="arc-connection">
+          <ConnectionPill state={connection} />
+          {connection === 'online' && (
+            <button
+              className="arc-refresh-button"
+              type="button"
+              onClick={() => void connect()}
+            >
+              刷新连接
+            </button>
+          )}
+        </div>
       </div>
 
       <main className="arc-content">

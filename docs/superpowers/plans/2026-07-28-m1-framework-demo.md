@@ -8,6 +8,8 @@
 
 **Tech Stack:** Node.js 24, npm workspaces, TypeScript, React, Vite, Vitest, Testing Library, Python 3.14, FastAPI, Pydantic, pytest, httpx2.
 
+**Current status:** Code implementation and automated verification are complete. Required manual Chrome smoke acceptance has not been executed, so M1 is not marked complete.
+
 ---
 
 ## Scope and acceptance boundary
@@ -21,7 +23,7 @@ M1 is complete only when all of the following are demonstrated:
 - The panel distinguishes connecting, online, and offline states.
 - An online panel loads the demo assessment, renders total score, dimensions, evidence, risk flags, and follow-up questions.
 - Three demo communication suggestions can be selected and copied; the extension never types or sends them into the page.
-- Backend and extension tests pass, the extension production build succeeds, and a manual smoke checklist is recorded.
+- Backend and extension tests pass, the extension production build succeeds, and the manual Chrome smoke checklist is executed with observed results recorded.
 
 Explicitly deferred: real BOSS DOM parsing, LLM providers, SQLite persistence, editable job configuration, batch-list extraction, automated messaging, cloud deployment, and accounts.
 

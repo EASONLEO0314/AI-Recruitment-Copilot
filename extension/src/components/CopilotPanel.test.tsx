@@ -63,6 +63,8 @@ const assessment: AssessmentResponse = {
 
 
 beforeEach(() => {
+  vi.mocked(getHealth).mockReset();
+  vi.mocked(getDemoAssessment).mockReset();
   vi.mocked(getHealth).mockResolvedValue({
     request_id: 'health-1',
     status: 'ok',
@@ -85,6 +87,19 @@ describe('CopilotPanel', () => {
     expect(getDemoAssessment).not.toHaveBeenCalled();
   });
 
+  it('reconnects after the backend becomes available again', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getHealth).mockRejectedValueOnce(new Error('offline'));
+    render(<CopilotPanel />);
+    await screen.findByText('本机服务未连接');
+
+    await user.click(screen.getByRole('button', { name: '重新连接' }));
+
+    expect(await screen.findByText('92%')).toBeInTheDocument();
+    expect(getHealth).toHaveBeenCalledTimes(2);
+    expect(getDemoAssessment).toHaveBeenCalledTimes(1);
+  });
+
   it('loads the explicitly labelled demo assessment', async () => {
     render(<CopilotPanel />);
 
@@ -92,6 +107,51 @@ describe('CopilotPanel', () => {
     expect(screen.getByText('演示数据')).toBeInTheDocument();
     expect(screen.getByText('非常匹配，建议联系')).toBeInTheDocument();
     expect(screen.getByText('具备 AI for Science 经验')).toBeInTheDocument();
+  });
+
+  it('refreshes an online connection and clears stale results when the backend stops', async () => {
+    const user = userEvent.setup();
+    let rejectRefresh: (reason?: unknown) => void = () => undefined;
+    const pendingRefresh = new Promise<never>((_, reject) => {
+      rejectRefresh = reject;
+    });
+    vi.mocked(getHealth)
+      .mockResolvedValueOnce({
+        request_id: 'health-1',
+        status: 'ok',
+        service: 'ai-recruitment-copilot',
+        version: '0.1.0',
+      })
+      .mockReturnValueOnce(pendingRefresh);
+    render(<CopilotPanel />);
+    await screen.findByText('92%');
+
+    await user.click(screen.getByRole('button', { name: '刷新连接' }));
+
+    expect(screen.getByText('正在连接本机分析服务')).toBeInTheDocument();
+    expect(screen.queryByText('92%')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '刷新连接' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      rejectRefresh(new Error('offline'));
+    });
+    expect(await screen.findByText('本机服务未连接')).toBeInTheDocument();
+    expect(getHealth).toHaveBeenCalledTimes(2);
+    expect(getDemoAssessment).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears stale copy feedback when refreshing the assessment', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+    render(<CopilotPanel />);
+    await screen.findByText('92%');
+    await user.click(screen.getByRole('button', { name: '复制话术' }));
+    expect(screen.getByText('已复制')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '刷新连接' }));
+
+    expect(await screen.findByText('92%')).toBeInTheDocument();
+    expect(screen.queryByText('已复制')).not.toBeInTheDocument();
   });
 
   it('expands dimension evidence on demand', async () => {
