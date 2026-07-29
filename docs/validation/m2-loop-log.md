@@ -74,7 +74,7 @@ Task 7 写文档前已经使用 7 / 8 个 targeted repair rounds；如果 Task 8
 | 4 / `2001dff` | `vitest:coordinator-root-errors:observation-root-exception:extension/src/parser/coordinator.ts` | observation-root 的 `querySelectorAll` 同步异常被静默吞掉，没有发送脱敏的 safe error snapshot。 | observation-root lookup 的 `catch` 只阻止异常外泄，没有 emit error snapshot。 | `extension/src/parser/coordinator.test.ts`；`extension/src/parser/coordinator.ts` | `npm.cmd run test --workspace extension -- src/parser/coordinator.test.ts --run` | 7 passed |
 | 5 / `4f8087e` | `vitest:coordinator-observer-relay:attribute-mutation-and-retry-dedupe:extension/src/parser/coordinator.ts` | 同一审查批次出现两个新 finding：`active` / `is-active` 的 class 或 `aria-selected` 只发生属性变化时未触发 observer；`sendMessage` rejection 前 dedupe key 已提交，使相同内容不能重试。 | observer 缺少 `attributes` 和相应 `attributeFilter`；dedupe 没有分离 successful key 与 inflight key。 | `extension/src/parser/coordinator.test.ts`；`extension/src/parser/coordinator.ts` | `npm.cmd run test --workspace extension -- src/parser/coordinator.test.ts --run` | 10 passed |
 | 6 / `81306f2` | `vitest:parser-routing-ack:false-ack-and-rejection-accepted:extension/src/background.ts` | false ACK、background promise rejection 和 refresh rejection 会被当作成功或形成未处理拒绝。 | routing / relay 边界只覆盖同步返回，没有把 false ACK 与 rejected transport 统一视为失败并安全重试。 | `extension/src/background.test.ts`；`extension/src/background.ts`；`extension/src/parser/coordinator.test.ts`；`extension/src/parser/coordinator.ts`；`extension/src/parser/router.test.ts` | `npm.cmd run test --workspace extension -- src/parser/router.test.ts src/background.test.ts src/parser/coordinator.test.ts --run` | 39 passed |
-| 7 / `15321cf` | `vitest:preview-watermark-coverage:untrusted-status-and-section-denominator:extension/src/parser/client.ts` | 登录状态水印可能随不可信 snapshot 消失，section coverage 的分母也可能漏算核心区域。 | client 规范化和预览呈现没有把 logged-out 安全水印与核心 section coverage 作为不可降级边界。 | `extension/src/components/PageReadingCard.test.tsx`；`extension/src/components/PageReadingCard.tsx`；`extension/src/parser/client.test.ts`；`extension/src/parser/client.ts` | `npm.cmd run test --workspace extension -- src/parser/client.test.ts src/components/PageReadingCard.test.tsx --run` | 31 passed |
+| 7 / `15321cf` | `vitest:parser-client:logged-out-watermark-regression:extension/src/parser/client.ts`<br>`vitest:page-reading-card:core-field-coverage-missing:extension/src/components/PageReadingCard.tsx` | 两个新 finding：candidate `t2` 后接受更旧的 logged-out `t1` 作为安全状态时，delayed / equal candidate `t2` 存在恢复候选人预览的风险；UI 没有显示五个 core fields 的覆盖率。 | relay 选择只比较当前显示项的 `captured_at`，接受旧 logged-out 后会丢失已经观察到的最大 candidate 时间，需要保留 watermark 并只允许真正更新的 candidate 恢复；PageReadingCard 没有按五个 core fields 计算和呈现覆盖率。 | `extension/src/components/PageReadingCard.test.tsx`；`extension/src/components/PageReadingCard.tsx`；`extension/src/parser/client.test.ts`；`extension/src/parser/client.ts` | `npm.cmd run test --workspace extension -- src/parser/client.test.ts src/components/PageReadingCard.test.tsx --run` | 31 passed |
 
 ## Task 8 最终完整闭合
 
@@ -97,6 +97,8 @@ Task 7 写文档前已经使用 7 / 8 个 targeted repair rounds；如果 Task 8
 - 准确率：未计算。
 - 尚无 `work_experience`、`education`、`projects`、`skills` 或 `experience_years` 的字段级 pass / partial / fail / not_present 记录。
 - 尚无自动操作、自动刷新或 stale candidate 的人工观察结果。
+
+未来计算口径（尚未应用于任何样本）：numerator 只统计 `pass`；`partial` 和 `fail` 属于 present、保留在 denominator 但不计 correct；`not_present` 排除 denominator。denominator 只汇总至少 5 个样本中每页实际 present 的五个 core fields。若 total present core fields 为 `0`，不得计算准确率，也不得判定通过。
 
 ## 数据记录边界
 

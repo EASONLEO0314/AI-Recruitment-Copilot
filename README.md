@@ -137,6 +137,14 @@ M1 Chrome 人工验收已有事实记录且已通过。README 只保留可重复
 - [ ] 按 `正确的 present core fields / 全部 present core fields` 计算准确率，至少 5 个样本的汇总结果达到 `95%` 或更高。
 - [ ] 不记录真实字段值，不保存候选人 HTML、截图、姓名、电话、邮箱或简历正文。
 
+准确率计算遵循以下 runbook 规则；这些规则不预填任何验收结果：
+
+- numerator 只统计标记为 `pass` 的核心字段。
+- `partial` 和 `fail` 表示字段在页面实际 present，因此保留在 denominator，但不计入 correct。
+- `not_present` 表示页面没有该字段，排除在 denominator 之外。
+- denominator 只包含每页实际 present 的 `work_experience`、`education`、`projects`、`skills` 和 `experience_years`，并汇总至少 5 个样本。
+- 如果汇总后的 total present core fields 为 `0`，不得计算准确率，也不得判定通过；即使已经打开 5 个样本也适用此规则。
+
 每个样本使用以下空白模板；`sample_id` 只使用匿名编号，不预填或记录任何真实字段值：
 
 ```text
