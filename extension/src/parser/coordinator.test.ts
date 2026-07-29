@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ParserSnapshotMessage } from '../contracts';
+import { OBSERVATION_ROOT_SELECTOR } from './adapters/recommend';
 import { startParserCoordinator } from './coordinator';
 
 
@@ -83,6 +84,9 @@ describe('parser coordinator', () => {
     const observationRoot = setRecommendFixture();
     const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);
     let nowOffset = 0;
+    const now = vi.fn(
+      () => new Date(capturedAt.getTime() + nowOffset++ * 1_000),
+    );
 
     const handle = startParserCoordinator({
       targetDocument: document,
@@ -90,9 +94,10 @@ describe('parser coordinator', () => {
       isTopFrame: false,
       sendMessage,
       Observer: FakeObserver as unknown as typeof MutationObserver,
-      now: () => new Date(capturedAt.getTime() + nowOffset++ * 1_000),
+      now,
     });
 
+    expect(now).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenCalledTimes(1);
     expect(sendMessage.mock.calls[0][0]).toMatchObject({
       type: 'ARC_PARSER_SNAPSHOT',
@@ -111,14 +116,17 @@ describe('parser coordinator', () => {
     FakeObserver.instances[0].emit();
     FakeObserver.instances[0].emit();
     vi.advanceTimersByTime(399);
+    expect(now).toHaveBeenCalledTimes(1);
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
     vi.advanceTimersByTime(1);
+    expect(now).toHaveBeenCalledTimes(2);
     expect(sendMessage).toHaveBeenCalledTimes(1);
 
     document.querySelector('.candidate-card-wrap .name')!.textContent = '匿名候选人乙';
     FakeObserver.instances[0].emit();
     vi.advanceTimersByTime(400);
+    expect(now).toHaveBeenCalledTimes(3);
     expect(sendMessage).toHaveBeenCalledTimes(2);
     expect(sendMessage.mock.calls[1][0].snapshot.profile?.display_name).toBe('匿名候选人乙');
 
@@ -256,6 +264,40 @@ describe('parser coordinator', () => {
     expect(JSON.stringify(sendMessage.mock.calls[0][0])).not.toContain(secret);
     expect(FakeObserver.instances).toHaveLength(0);
     querySelectorAll.mockRestore();
+  });
+
+  it('sends a sanitized error snapshot when only observation-root lookup throws', () => {
+    setRecommendFixture();
+    const secret = 'private observation root text';
+    const originalQuerySelectorAll = document.querySelectorAll.bind(document);
+    vi.spyOn(document, 'querySelectorAll').mockImplementation((selector) => {
+      if (selector === OBSERVATION_ROOT_SELECTOR) {
+        throw new Error(secret);
+      }
+      return originalQuerySelectorAll(selector);
+    });
+    const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/web/frame/recommend',
+      isTopFrame: false,
+      sendMessage,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+    });
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls.at(-1)?.[0]).toMatchObject({
+      type: 'ARC_PARSER_SNAPSHOT',
+      snapshot: {
+        page_kind: 'recommend_frame',
+        status: 'error',
+        warnings: ['parser-exception'],
+      },
+    });
+    expect(JSON.stringify(sendMessage.mock.calls)).not.toContain(secret);
+    expect(FakeObserver.instances).toHaveLength(0);
   });
 
   it('contains sendMessage rejections instead of leaking them', async () => {

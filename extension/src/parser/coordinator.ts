@@ -138,6 +138,16 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
     }
   };
 
+  const emitSnapshot = (snapshot: ParserSnapshot, force = false): void => {
+    const nextDedupeKey = dedupeKey(snapshot);
+    if (!force && nextDedupeKey === lastDedupeKey) {
+      return;
+    }
+
+    lastDedupeKey = nextDedupeKey;
+    sendSnapshot(snapshot);
+  };
+
   const run = (force = false): void => {
     if (stopped) {
       return;
@@ -150,13 +160,7 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
       snapshot = buildStatusSnapshot(pageKind, 'error', 'parser-exception', now());
     }
 
-    const nextDedupeKey = dedupeKey(snapshot);
-    if (!force && nextDedupeKey === lastDedupeKey) {
-      return;
-    }
-
-    lastDedupeKey = nextDedupeKey;
-    sendSnapshot(snapshot);
+    emitSnapshot(snapshot, force);
   };
 
   const runtimeListener: Parameters<typeof chrome.runtime.onMessage.addListener>[0] = (
@@ -178,7 +182,9 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
   try {
     observationRoot = findObservationRoot(pageKind, options.targetDocument);
   } catch {
-    // A failed recognition pass must not escape after the safe error snapshot.
+    emitSnapshot(
+      buildStatusSnapshot(pageKind, 'error', 'parser-exception', now()),
+    );
   }
   if (observationRoot && Observer) {
     observer = new Observer(() => {
