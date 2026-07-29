@@ -71,3 +71,80 @@ export interface ApiSuccess<T> {
 }
 
 export type ApiRuntimeResponse<T> = ApiSuccess<T> | ApiFailure;
+
+
+export type PageKind =
+  | 'logged_out'
+  | 'non_candidate'
+  | 'recommend_frame'
+  | 'resume_frame'
+  | 'unsupported';
+
+export type ParserStatus = 'waiting' | 'ready' | 'partial' | 'unsupported' | 'error';
+
+export interface EducationExperience {
+  school?: string;
+  degree?: string;
+  major?: string;
+  period?: string;
+}
+
+export interface WorkExperience {
+  company?: string;
+  title?: string;
+  period?: string;
+  description?: string;
+}
+
+export interface ProjectExperience {
+  name?: string;
+  role?: string;
+  period?: string;
+  description?: string;
+}
+
+export interface CandidateProfile {
+  display_name?: string;
+  current_title?: string;
+  location?: string;
+  experience_years?: number;
+  expected_position?: string;
+  expected_city?: string;
+  education: EducationExperience[];
+  work_experiences: WorkExperience[];
+  project_experiences: ProjectExperience[];
+  skills: string[];
+  summary?: string;
+}
+
+export interface ParserSnapshot {
+  schema_version: 1;
+  parser_version: 'boss-dom-v1';
+  page_kind: PageKind;
+  status: ParserStatus;
+  captured_at: string;
+  fingerprint?: string;
+  profile?: CandidateProfile;
+  present_fields: string[];
+  missing_fields: string[];
+  warnings: string[];
+}
+
+export interface ParserSnapshotMessage {
+  type: 'ARC_PARSER_SNAPSHOT';
+  snapshot: ParserSnapshot;
+}
+
+export interface ParserRefreshRequest {
+  type: 'ARC_PARSER_REFRESH';
+}
+
+export interface ParserRefreshCommand {
+  type: 'ARC_PARSER_REFRESH_COMMAND';
+}
+
+export interface ParserRelayMessage {
+  type: 'ARC_PARSER_RELAY';
+  snapshot: ParserSnapshot;
+  source: { frame_id: number; document_id: string };
+}
