@@ -3,13 +3,47 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getDemoAssessment, getHealth } from '../api';
-import type { AssessmentResponse } from '../contracts';
+import type { AssessmentResponse, ParserRelayMessage } from '../contracts';
+import { buildProfileSnapshot, buildStatusSnapshot } from '../parser/snapshot';
 import { CopilotPanel } from './CopilotPanel';
+
+
+const parserClient = vi.hoisted(() => {
+  let listener: ((message: ParserRelayMessage) => void) | null = null;
+  const requestRefresh = vi.fn().mockResolvedValue(undefined);
+  const subscribe = vi.fn((next: (message: ParserRelayMessage) => void) => {
+    listener = next;
+    return () => {
+      if (listener === next) {
+        listener = null;
+      }
+    };
+  });
+
+  return {
+    emit(message: ParserRelayMessage) {
+      listener?.(message);
+    },
+    requestRefresh,
+    reset() {
+      listener = null;
+      requestRefresh.mockReset().mockResolvedValue(undefined);
+      subscribe.mockClear();
+    },
+    subscribe,
+  };
+});
 
 
 vi.mock('../api', () => ({
   getHealth: vi.fn(),
   getDemoAssessment: vi.fn(),
+}));
+
+vi.mock('../parser/client', () => ({
+  acceptParserRelay: (_current: ParserRelayMessage | null, incoming: ParserRelayMessage) => incoming,
+  requestParserRefresh: parserClient.requestRefresh,
+  subscribeToParserRelays: parserClient.subscribe,
 }));
 
 const assessment: AssessmentResponse = {
@@ -61,8 +95,32 @@ const assessment: AssessmentResponse = {
   ],
 };
 
+const loggedOutRelay: ParserRelayMessage = {
+  type: 'ARC_PARSER_RELAY',
+  snapshot: buildStatusSnapshot(
+    'logged_out',
+    'ready',
+    undefined,
+    new Date('2026-07-29T02:00:00.000Z'),
+  ),
+  source: { frame_id: 0, document_id: 'anonymous-document' },
+};
+
+const partialRelay: ParserRelayMessage = {
+  type: 'ARC_PARSER_RELAY',
+  snapshot: buildProfileSnapshot('resume_frame', {
+    display_name: '候选人甲',
+    education: [],
+    work_experiences: [],
+    project_experiences: [],
+    skills: ['TypeScript'],
+  }, new Date('2026-07-29T02:00:00.000Z')),
+  source: { frame_id: 0, document_id: 'anonymous-document' },
+};
+
 
 beforeEach(() => {
+  parserClient.reset();
   vi.mocked(getHealth).mockReset();
   vi.mocked(getDemoAssessment).mockReset();
   vi.mocked(getHealth).mockResolvedValue({
@@ -76,6 +134,43 @@ beforeEach(() => {
 
 
 describe('CopilotPanel', () => {
+  it('shows logged-out page reading while the backend is offline', async () => {
+    vi.mocked(getHealth).mockRejectedValue(new Error('offline'));
+
+    render(<CopilotPanel />);
+
+    expect(await screen.findByText('本机服务未连接')).toBeInTheDocument();
+    act(() => parserClient.emit(loggedOutRelay));
+    expect(screen.getByText('BOSS 当前未登录')).toBeInTheDocument();
+    expect(screen.getByText('扩展已加载，登录后才可读取候选人资料')).toBeInTheDocument();
+  });
+
+  it('keeps the assessment explicitly demo after a partial profile relay', async () => {
+    render(<CopilotPanel />);
+    expect(await screen.findByText('92%')).toBeInTheDocument();
+
+    act(() => parserClient.emit(partialRelay));
+
+    expect(screen.getByText('候选人甲')).toBeInTheDocument();
+    expect(screen.getByText('演示数据')).toBeInTheDocument();
+    expect(screen.getByText('92%')).toBeInTheDocument();
+    expect(screen.queryByText('真实评估')).not.toBeInTheDocument();
+  });
+
+  it('refreshes page reading once without clipboard or scrolling side effects', async () => {
+    const user = userEvent.setup();
+    const writeText = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue(undefined);
+    const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
+    render(<CopilotPanel />);
+    await screen.findByText('92%');
+
+    await user.click(screen.getByRole('button', { name: '重新读取页面' }));
+
+    expect(parserClient.requestRefresh).toHaveBeenCalledOnce();
+    expect(writeText).not.toHaveBeenCalled();
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
   it('shows offline guidance and retry when health check fails', async () => {
     vi.mocked(getHealth).mockRejectedValue(new Error('offline'));
 

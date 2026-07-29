@@ -5,7 +5,14 @@ import type {
   AssessmentResponse,
   ConnectionState,
   MessageType,
+  ParserRelayMessage,
 } from '../contracts';
+import {
+  acceptParserRelay,
+  requestParserRefresh,
+  subscribeToParserRelays,
+} from '../parser/client';
+import { PageReadingCard } from './PageReadingCard';
 
 
 const DEMO_CANDIDATE = '张同学';
@@ -62,6 +69,8 @@ export function CopilotPanel() {
   const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
   const [activeMessageType, setActiveMessageType] = useState<MessageType>('greeting');
   const [copyFeedback, setCopyFeedback] = useState('');
+  const [parserRelay, setParserRelay] = useState<ParserRelayMessage | null>(null);
+  const [parserRefreshing, setParserRefreshing] = useState(false);
   const copyFeedbackTimer = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
 
   const connect = useCallback(async () => {
@@ -87,6 +96,11 @@ export function CopilotPanel() {
     void connect();
   }, [connect]);
 
+  useEffect(() => subscribeToParserRelays((incoming) => {
+    setParserRelay((current) => acceptParserRelay(current, incoming));
+    setParserRefreshing(false);
+  }), []);
+
   useEffect(() => () => {
     if (copyFeedbackTimer.current !== null) {
       globalThis.clearTimeout(copyFeedbackTimer.current);
@@ -97,6 +111,15 @@ export function CopilotPanel() {
     () => assessment?.messages.find((message) => message.type === activeMessageType),
     [activeMessageType, assessment],
   );
+
+  const refreshPageReading = async () => {
+    setParserRefreshing(true);
+    try {
+      await requestParserRefresh();
+    } catch {
+      setParserRefreshing(false);
+    }
+  };
 
   const copyActiveMessage = async () => {
     if (!activeMessage) {
@@ -170,6 +193,11 @@ export function CopilotPanel() {
       </div>
 
       <main className="arc-content">
+        <PageReadingCard
+          snapshot={parserRelay?.snapshot ?? null}
+          onRefresh={() => void refreshPageReading()}
+          refreshing={parserRefreshing}
+        />
         {connection === 'connecting' && <LoadingState />}
         {connection === 'offline' && <OfflineState onRetry={() => void connect()} />}
         {connection === 'online' && assessment && (
@@ -295,7 +323,7 @@ export function CopilotPanel() {
       </main>
 
       <footer className="arc-footer">
-        M1 演示版 · 无真实简历解析或自动操作
+        M2 页面只读解析 · 评估仍为演示数据 · 无自动操作
       </footer>
     </aside>
   );
