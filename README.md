@@ -39,7 +39,7 @@ AI Recruitment Copilot 是一个本地优先的招聘辅助工具。当前事实
 - Windows 10/11
 - Chrome
 - Node.js 24 和 npm
-- Python 3.14（可通过 `py -3.14` 调用）
+- Python 3.14（`scripts\python.cmd` 优先使用可用的 `py -3.14`；launcher 不可用时回退到 `%LocalAppData%\Programs\Python\Python314\python.exe`）
 
 ## 计划中的 HR 使用环境（尚未实现）
 
@@ -56,11 +56,11 @@ AI Recruitment Copilot 是一个本地优先的招聘辅助工具。当前事实
 
 ```powershell
 npm.cmd install
-py -3.14 -m venv .venv
+scripts\python.cmd -m venv .venv
 .venv\Scripts\python.exe -m pip install -r backend\requirements-dev.txt
 ```
 
-项目使用 `scripts\python.cmd` 调用 Python。这个入口会加载 `.venv` 中的依赖，同时兼容包含中文字符的项目路径。
+项目使用 `scripts\python.cmd` 解决 Python runtime 发现并加载 `.venv` 中的依赖。新建 `.venv` 后，依赖安装仍使用该 venv 自己的 Python，避免写入 base interpreter；这个入口同时兼容包含中文字符的项目路径。
 
 ## 启动本机服务
 
