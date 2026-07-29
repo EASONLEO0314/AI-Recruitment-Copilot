@@ -95,6 +95,7 @@ describe('parser coordinator', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
@@ -372,6 +373,33 @@ describe('parser coordinator', () => {
     await Promise.resolve();
     expect(sendMessage).toHaveBeenCalledOnce();
     expect(JSON.stringify(sendMessage.mock.calls[0][0])).not.toContain('network detail');
+  });
+
+  it('retries an unchanged snapshot after the default runtime transport returns a false ack', async () => {
+    setRecommendFixture();
+    const runtimeSendMessage = vi.fn()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true });
+    vi.stubGlobal('chrome', { runtime: { sendMessage: runtimeSendMessage } });
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/web/frame/recommend',
+      isTopFrame: false,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+    });
+    await flushMicrotasks();
+
+    FakeObserver.instances[0].emit();
+    vi.advanceTimersByTime(400);
+
+    expect(runtimeSendMessage).toHaveBeenCalledTimes(2);
+    await flushMicrotasks();
+
+    FakeObserver.instances[0].emit();
+    vi.advanceTimersByTime(400);
+    expect(runtimeSendMessage).toHaveBeenCalledTimes(2);
   });
 
   it('retries an unchanged snapshot after the previous transport rejects', async () => {

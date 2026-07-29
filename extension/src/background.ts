@@ -95,7 +95,10 @@ export function createRuntimeMessageListener(
     if (typeof message === 'object' && message !== null) {
       const messageType = (message as { type?: unknown }).type;
       if (messageType === 'ARC_PARSER_SNAPSHOT' || messageType === 'ARC_PARSER_REFRESH') {
-        void parserRouter(message, sender).then((ok) => sendResponse({ ok }));
+        void parserRouter(message, sender).then(
+          (ok) => sendResponse({ ok }),
+          () => sendResponse({ ok: false }),
+        );
         return true;
       }
     }

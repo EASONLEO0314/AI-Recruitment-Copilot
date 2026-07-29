@@ -77,6 +77,20 @@ describe('parser message router', () => {
     );
   });
 
+  it('returns false when a frame-zero refresh broadcast rejects', async () => {
+    const sendToTab = vi.fn().mockRejectedValue(new Error('send failed'));
+
+    expect(await routeParserMessage(
+      { type: 'ARC_PARSER_REFRESH' },
+      { tab: { id: 17 }, frameId: 0 },
+      sendToTab,
+    )).toBe(false);
+    expect(sendToTab).toHaveBeenCalledWith(
+      17,
+      { type: 'ARC_PARSER_REFRESH_COMMAND' },
+    );
+  });
+
   it.each([
     ['missing tab id', { tab: {}, frameId: 0 }],
     ['NaN tab id', { tab: { id: Number.NaN }, frameId: 0 }],

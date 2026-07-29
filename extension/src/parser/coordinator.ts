@@ -30,12 +30,18 @@ export interface CoordinatorOptions {
 }
 
 
-function defaultSendMessage(message: ParserSnapshotMessage): Promise<unknown> {
-  if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) {
-    return Promise.resolve(undefined);
+async function defaultSendMessage(message: ParserSnapshotMessage): Promise<unknown> {
+  const acknowledgement = typeof chrome === 'undefined' || !chrome.runtime?.sendMessage
+    ? undefined
+    : await chrome.runtime.sendMessage(message);
+
+  if (typeof acknowledgement !== 'object'
+    || acknowledgement === null
+    || (acknowledgement as { ok?: unknown }).ok !== true) {
+    throw new Error('Parser routing was not acknowledged');
   }
 
-  return chrome.runtime.sendMessage(message);
+  return acknowledgement;
 }
 
 

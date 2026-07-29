@@ -146,6 +146,22 @@ describe('background runtime listener', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 
+  it('responds with a false ack when the parser router rejects', async () => {
+    const fetcher = vi.fn();
+    const routeParser = vi.fn().mockRejectedValue(new Error('private routing detail'));
+    const sendResponse = vi.fn();
+    const listener = createRuntimeMessageListener(fetcher, routeParser);
+
+    expect(listener(parserSnapshot, { tab: { id: 17 }, frameId: 4 }, sendResponse)).toBe(true);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(sendResponse).toHaveBeenCalledOnce();
+    expect(sendResponse).toHaveBeenCalledWith({ ok: false });
+    expect(JSON.stringify(sendResponse.mock.calls)).not.toContain('private routing detail');
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('returns parser validation failures without calling the API fetcher', async () => {
     const fetcher = vi.fn();
     const sendResponse = vi.fn();
