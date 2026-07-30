@@ -24,6 +24,34 @@ const CORE_PROFILE_FIELDS = new Set([
   'experience_years',
 ]);
 
+const STRUCTURE_CLASS_FORMAT = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
+const STRUCTURE_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|dialog|drawer|detail|job|expect|advantage|card|list|section|item|content|name|base|info)/i;
+
+
+function RecommendStructureReading({ snapshot }: { snapshot: ParserSnapshot }) {
+  const cardCountWarning = snapshot.warnings.find((warning) =>
+    /^structure:card-count=(?:[0-9]|[1-4][0-9]|50)$/.test(warning));
+  const cardCount = cardCountWarning?.slice('structure:card-count='.length);
+  const classTokens = snapshot.warnings
+    .filter((warning) => warning.startsWith('structure:class='))
+    .map((warning) => warning.slice('structure:class='.length))
+    .filter((token) => STRUCTURE_CLASS_FORMAT.test(token) && STRUCTURE_CLASS_KEYWORD.test(token))
+    .slice(0, 18);
+
+  return (
+    <>
+      <strong>已识别 BOSS 推荐页，但候选人结构未匹配</strong>
+      {cardCount !== undefined && <span>旧版卡片匹配 {cardCount}</span>}
+      {classTokens.length > 0 && (
+        <div className="arc-reading__skills" aria-label="页面结构 class">
+          {classTokens.map((token) => <span key={token}>{token}</span>)}
+        </div>
+      )}
+      <small>仅显示结构标识，不包含候选人正文</small>
+    </>
+  );
+}
+
 
 function ProfileReading({ snapshot }: { snapshot: ParserSnapshot }) {
   const profile = snapshot.profile;
@@ -95,6 +123,10 @@ function ReadingStatus({ snapshot }: { snapshot: ParserSnapshot | null }) {
 
   if (snapshot.page_kind === 'non_candidate') {
     return <strong>当前页面没有可读取的候选人资料</strong>;
+  }
+
+  if (snapshot.page_kind === 'recommend_frame' && snapshot.status === 'unsupported') {
+    return <RecommendStructureReading snapshot={snapshot} />;
   }
 
   if (snapshot.page_kind === 'unsupported' || snapshot.status === 'unsupported') {

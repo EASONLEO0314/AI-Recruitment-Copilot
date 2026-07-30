@@ -15,6 +15,38 @@ export const ACTIVE_CARD_SELECTOR = [
 export const OBSERVATION_ROOT_SELECTOR = '.card-list, .geek-list-wrap .geek-list';
 
 const LOCATION_EXCLUSIONS = /年|学历|本科|硕士|博士|大专/;
+const STRUCTURE_CLASS_FORMAT = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
+const STRUCTURE_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|dialog|drawer|detail|job|expect|advantage|card|list|section|item|content|name|base|info)/i;
+const MAX_STRUCTURE_CLASSES = 18;
+
+
+function structureWarnings(document: Document, cardCount: number): string[] {
+  const warnings = [
+    'recommend-active-card-not-found',
+    `structure:card-count=${Math.min(cardCount, 50)}`,
+  ];
+  const seen = new Set<string>();
+
+  for (const element of document.querySelectorAll('[class]')) {
+    if (isHidden(element)) {
+      continue;
+    }
+    for (const token of element.classList) {
+      if (!STRUCTURE_CLASS_FORMAT.test(token)
+        || !STRUCTURE_CLASS_KEYWORD.test(token)
+        || seen.has(token)) {
+        continue;
+      }
+      seen.add(token);
+      warnings.push(`structure:class=${token}`);
+      if (seen.size === MAX_STRUCTURE_CLASSES) {
+        return warnings;
+      }
+    }
+  }
+
+  return warnings;
+}
 
 
 export function findRecommendObservationRoot(document: Document): Element | null {
@@ -30,12 +62,16 @@ export function parseRecommendFrame(document: Document, now: Date): ParserSnapsh
   const card = activeCard ?? (cards.length === 1 ? cards[0] : undefined);
 
   if (!card) {
-    return buildStatusSnapshot(
+    const snapshot = buildStatusSnapshot(
       'recommend_frame',
       'unsupported',
-      'recommend-active-card-not-found',
+      undefined,
       now,
     );
+    return {
+      ...snapshot,
+      warnings: structureWarnings(document, cards.length),
+    };
   }
 
   const name = firstText(card, ['.name-wrap .name', '.name'], 80);

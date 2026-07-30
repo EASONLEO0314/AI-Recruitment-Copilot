@@ -81,8 +81,51 @@ describe('recommend frame adapter', () => {
     const snapshot = parseRecommendFrame(document, capturedAt);
 
     expect(snapshot.status).toBe('unsupported');
-    expect(snapshot.warnings).toEqual(['recommend-active-card-not-found']);
+    expect(snapshot.warnings.slice(0, 2)).toEqual([
+      'recommend-active-card-not-found',
+      'structure:card-count=2',
+    ]);
     expect(snapshot).not.toHaveProperty('profile');
+    expectNoPageOperations();
+  });
+
+  it('reports only bounded structural class diagnostics when the legacy card is absent', () => {
+    const extraClasses = Array.from(
+      { length: 24 },
+      (_, index) => `candidate-item-${index}`,
+    ).join(' ');
+    document.body.insertAdjacentHTML('beforeend', `
+      <main
+        id="sensitive-candidate-id"
+        data-private="account-detail"
+        class="recommend-detail resume-content unsafe@class tracking-token ${extraClasses}"
+      >
+        <section class="candidate-detail section-item history-list work-experience">
+          不得进入诊断的候选人正文
+        </section>
+      </main>`);
+
+    const snapshot = parseRecommendFrame(document, capturedAt);
+    const serializedWarnings = JSON.stringify(snapshot.warnings);
+
+    expect(snapshot.status).toBe('unsupported');
+    expect(snapshot.warnings.slice(0, 8)).toEqual([
+      'recommend-active-card-not-found',
+      'structure:card-count=0',
+      'structure:class=recommend-detail',
+      'structure:class=resume-content',
+      'structure:class=candidate-item-0',
+      'structure:class=candidate-item-1',
+      'structure:class=candidate-item-2',
+      'structure:class=candidate-item-3',
+    ]);
+    expect(snapshot.warnings).toHaveLength(20);
+    expect(snapshot.warnings.every((warning) => warning.length <= 160)).toBe(true);
+    expect(serializedWarnings).not.toContain('候选人正文');
+    expect(serializedWarnings).not.toContain('sensitive-candidate-id');
+    expect(serializedWarnings).not.toContain('account-detail');
+    expect(serializedWarnings).not.toContain('unsafe@class');
+    expect(serializedWarnings).not.toContain('tracking-token');
     expectNoPageOperations();
   });
 

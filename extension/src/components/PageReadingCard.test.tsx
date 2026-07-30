@@ -114,6 +114,33 @@ describe('PageReadingCard', () => {
     },
   );
 
+  it('shows only safe structural diagnostics for an unsupported recommend frame', () => {
+    const snapshot = {
+      ...buildStatusSnapshot(
+        'recommend_frame',
+        'unsupported',
+        'recommend-active-card-not-found',
+        capturedAt,
+      ),
+      warnings: [
+        'recommend-active-card-not-found',
+        'structure:card-count=0',
+        'structure:class=recommend-detail',
+        'structure:class=resume-content',
+        'arbitrary-private-detail',
+      ],
+    };
+
+    render(<PageReadingCard snapshot={snapshot} onRefresh={vi.fn()} refreshing={false} />);
+
+    expect(screen.getByText('已识别 BOSS 推荐页，但候选人结构未匹配')).toBeInTheDocument();
+    expect(screen.getByText('旧版卡片匹配 0')).toBeInTheDocument();
+    expect(screen.getByText('recommend-detail')).toBeInTheDocument();
+    expect(screen.getByText('resume-content')).toBeInTheDocument();
+    expect(screen.queryByText('arbitrary-private-detail')).not.toBeInTheDocument();
+    expect(screen.queryByText('recommend-active-card-not-found')).not.toBeInTheDocument();
+  });
+
   it('never renders warning codes or arbitrary warning text verbatim', () => {
     const snapshot = {
       ...partialSnapshot,
