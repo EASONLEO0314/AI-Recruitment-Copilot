@@ -278,6 +278,122 @@ describe('parser coordinator', () => {
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 
+  it('skips the public job probe after a logged-out page becomes non-candidate', () => {
+    document.body.innerHTML = '<a>登录/注册</a>';
+    const runtime = createRuntimeOnMessage();
+    const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);
+    const publicJobProbe = vi.fn(() => ({ status: 'not_found' as const }));
+    const publicJobProbeLogger = vi.fn();
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/',
+      isTopFrame: true,
+      sendMessage,
+      runtimeOnMessage: runtime.event,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+      publicJobProbe,
+      publicJobProbeLogger,
+    });
+
+    document.body.innerHTML = '<main>Signed in</main>';
+    runtime.getListener()?.(
+      { type: 'ARC_PARSER_REFRESH_COMMAND' },
+      {} as chrome.runtime.MessageSender,
+      vi.fn(),
+    );
+
+    expect(publicJobProbe).not.toHaveBeenCalled();
+    expect(publicJobProbeLogger).not.toHaveBeenCalled();
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('runs the public job probe after a non-candidate page becomes logged out', () => {
+    document.body.innerHTML = '<main>Signed in</main>';
+    const runtime = createRuntimeOnMessage();
+    const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);
+    const probeResult = {
+      status: 'success' as const,
+      title: 'Platform Engineer',
+      company: 'Example Labs',
+      location: 'Shanghai',
+    };
+    const publicJobProbe = vi.fn(() => probeResult);
+    const publicJobProbeLogger = vi.fn();
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/',
+      isTopFrame: true,
+      sendMessage,
+      runtimeOnMessage: runtime.event,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+      publicJobProbe,
+      publicJobProbeLogger,
+    });
+
+    document.body.innerHTML = `
+      <a>登录/注册</a>
+      <section class="job-card-box">
+        <a href="/job_detail/transitioned">
+          <span class="job-name">Platform Engineer</span>
+        </a>
+        <span class="company-name">Example Labs</span>
+        <span class="job-area">Shanghai</span>
+      </section>`;
+    runtime.getListener()?.(
+      { type: 'ARC_PARSER_REFRESH_COMMAND' },
+      {} as chrome.runtime.MessageSender,
+      vi.fn(),
+    );
+
+    expect(publicJobProbe).toHaveBeenCalledOnce();
+    expect(publicJobProbe).toHaveBeenCalledWith(document);
+    expect(publicJobProbeLogger).toHaveBeenCalledOnce();
+    expect(publicJobProbeLogger).toHaveBeenCalledWith(probeResult);
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('preserves forced refresh when refresh-time page classification throws', () => {
+    document.body.innerHTML = '<a>登录/注册</a>';
+    const runtime = createRuntimeOnMessage();
+    const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);
+    const publicJobProbe = vi.fn(() => ({ status: 'not_found' as const }));
+    const publicJobProbeLogger = vi.fn();
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/',
+      isTopFrame: true,
+      sendMessage,
+      runtimeOnMessage: runtime.event,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+      publicJobProbe,
+      publicJobProbeLogger,
+    });
+    const querySelectorAll = vi.spyOn(document, 'querySelectorAll')
+      .mockImplementation(() => {
+        throw new Error('private classification detail');
+      });
+
+    try {
+      expect(() => runtime.getListener()?.(
+        { type: 'ARC_PARSER_REFRESH_COMMAND' },
+        {} as chrome.runtime.MessageSender,
+        vi.fn(),
+      )).not.toThrow();
+
+      expect(publicJobProbe).not.toHaveBeenCalled();
+      expect(publicJobProbeLogger).not.toHaveBeenCalled();
+      expect(sendMessage).toHaveBeenCalledTimes(2);
+    } finally {
+      querySelectorAll.mockRestore();
+    }
+  });
+
   it('does not run the public job probe for initial or mutation-driven subframe runs', () => {
     setRecommendFixture();
     const runtime = createRuntimeOnMessage();

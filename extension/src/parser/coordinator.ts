@@ -209,7 +209,21 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
   };
 
   const runPublicJobProbe = (): void => {
-    if (stopped || !options.isTopFrame || pageKind !== 'logged_out') {
+    if (stopped || !options.isTopFrame) {
+      return;
+    }
+
+    let refreshPageKind: PageKind;
+    try {
+      refreshPageKind = classifyPage(
+        options.targetDocument,
+        options.currentUrl,
+        options.isTopFrame,
+      );
+    } catch {
+      return;
+    }
+    if (refreshPageKind !== 'logged_out') {
       return;
     }
 
