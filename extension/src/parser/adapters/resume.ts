@@ -111,17 +111,11 @@ function parseProjectSection(section: Element): ProjectExperience[] {
 }
 
 
-export function parseResumeFrame(document: Document, now: Date): ParserSnapshot {
-  const root = findResumeRoot(document);
-  if (!root) {
-    return buildStatusSnapshot(
-      'resume_frame',
-      'unsupported',
-      'resume-root-not-found',
-      now,
-    );
-  }
-
+export function parseResumeRoot(
+  root: Element,
+  pageKind: 'recommend_frame' | 'resume_frame',
+  now: Date,
+): ParserSnapshot {
   const workExperiences: WorkExperience[] = [];
   const education: EducationExperience[] = [];
   const projectExperiences: ProjectExperience[] = [];
@@ -180,10 +174,25 @@ export function parseResumeFrame(document: Document, now: Date): ParserSnapshot 
     ...(unknownEducationStructure ? ['education-section-structure-unknown'] : []),
     ...(unknownProjectStructure ? ['project-section-structure-unknown'] : []),
   ];
-  const snapshot = buildProfileSnapshot('resume_frame', profile, now);
+  const snapshot = buildProfileSnapshot(pageKind, profile, now);
 
   return {
     ...snapshot,
     warnings: [...snapshot.warnings, ...warnings],
   };
+}
+
+
+export function parseResumeFrame(document: Document, now: Date): ParserSnapshot {
+  const root = findResumeRoot(document);
+  if (!root) {
+    return buildStatusSnapshot(
+      'resume_frame',
+      'unsupported',
+      'resume-root-not-found',
+      now,
+    );
+  }
+
+  return parseResumeRoot(root, 'resume_frame', now);
 }

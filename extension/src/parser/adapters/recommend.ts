@@ -1,6 +1,7 @@
 import type { CandidateProfile, ParserSnapshot } from '../../contracts';
 import { allTexts, firstText, isHidden } from '../dom';
 import { buildProfileSnapshot, buildStatusSnapshot } from '../snapshot';
+import { parseResumeRoot } from './resume';
 
 
 export const CARD_SELECTOR =
@@ -12,7 +13,18 @@ export const ACTIVE_CARD_SELECTOR = [
   '.geek-list .geek-card.active',
   '[aria-selected="true"]',
 ].join(', ');
-export const OBSERVATION_ROOT_SELECTOR = '.card-list, .geek-list-wrap .geek-list';
+export const OBSERVATION_ROOT_SELECTOR = [
+  '.recommend-wrap',
+  '.candidate-recommend',
+  '.card-list',
+  '.geek-list-wrap .geek-list',
+].join(', ');
+
+const MODERN_RESUME_ROOT_SELECTORS = [
+  '.dialog-lib-resume .lib-standard-resume',
+  '.dialog-lib-resume .resume-layout-wrap',
+  '.dialog-lib-resume',
+];
 
 const LOCATION_EXCLUSIONS = /年|学历|本科|硕士|博士|大专/;
 const STRUCTURE_CLASS_FORMAT = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
@@ -61,6 +73,18 @@ function structureWarnings(document: Document, cardCount: number): string[] {
 }
 
 
+function findModernResumeRoot(document: Document): Element | undefined {
+  for (const selector of MODERN_RESUME_ROOT_SELECTORS) {
+    const root = Array.from(document.querySelectorAll(selector))
+      .find((element) => !isHidden(element));
+    if (root) {
+      return root;
+    }
+  }
+  return undefined;
+}
+
+
 export function findRecommendObservationRoot(document: Document): Element | null {
   return Array.from(document.querySelectorAll(OBSERVATION_ROOT_SELECTOR))
     .find((element) => !isHidden(element)) ?? null;
@@ -68,6 +92,11 @@ export function findRecommendObservationRoot(document: Document): Element | null
 
 
 export function parseRecommendFrame(document: Document, now: Date): ParserSnapshot {
+  const resumeRoot = findModernResumeRoot(document);
+  if (resumeRoot) {
+    return parseResumeRoot(resumeRoot, 'recommend_frame', now);
+  }
+
   const cards = Array.from(document.querySelectorAll(CARD_SELECTOR))
     .filter((element) => !isHidden(element));
   const activeCard = cards.find((card) => card.matches(ACTIVE_CARD_SELECTOR));

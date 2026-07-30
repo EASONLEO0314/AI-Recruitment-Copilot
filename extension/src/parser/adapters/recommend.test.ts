@@ -71,6 +71,56 @@ describe('recommend frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('reads the visible modern resume dialog before ambiguous list cards', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="recommend-wrap">
+        <div class="candidate-recommend">
+          <article class="candidate-card-wrap"><span class="name">候选人甲</span></article>
+          <article class="candidate-card-wrap"><span class="name">候选人乙</span></article>
+        </div>
+        <div class="dialog-lib-resume">
+          <div class="lib-standard-resume">
+            <div class="resume-layout-wrap">
+              <h1 class="resume-name">候选人丙</h1>
+              <div class="base-info"><span>北京</span><span>4 年经验</span></div>
+              <p class="candidate-advantage">擅长匿名示例业务</p>
+              <section class="resume-item">
+                <h2 class="section-title">工作经历</h2>
+                <article class="history-item">
+                  <span class="company-name">示例公司</span>
+                  <span class="position-name">产品运营</span>
+                  <span class="date-range">2024-2026</span>
+                </article>
+              </section>
+              <span class="skill-label">数据分析</span>
+            </div>
+          </div>
+        </div>
+      </main>`);
+
+    const snapshot = parseRecommendFrame(document, capturedAt);
+
+    expect(snapshot.page_kind).toBe('recommend_frame');
+    expect(snapshot.profile).toMatchObject({
+      display_name: '候选人丙',
+      location: '北京',
+      experience_years: 4,
+      summary: '擅长匿名示例业务',
+      work_experiences: [{
+        company: '示例公司',
+        title: '产品运营',
+        period: '2024-2026',
+      }],
+      skills: ['数据分析'],
+    });
+    expect(JSON.stringify(snapshot)).not.toContain('候选人甲');
+    expect(JSON.stringify(snapshot)).not.toContain('候选人乙');
+    expect(findRecommendObservationRoot(document)).toBe(
+      document.querySelector('.recommend-wrap'),
+    );
+    expectNoPageOperations();
+  });
+
   it('reports ambiguity when several cards exist and none is selected', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="card-list">
