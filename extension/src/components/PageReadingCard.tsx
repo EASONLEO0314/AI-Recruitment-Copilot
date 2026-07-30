@@ -25,7 +25,7 @@ const CORE_PROFILE_FIELDS = new Set([
 ]);
 
 const STRUCTURE_CLASS_FORMAT = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
-const STRUCTURE_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|dialog|drawer|detail|job|expect|advantage|card|list|section|item|content|name|base|info)/i;
+const STRUCTURE_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline)/i;
 
 
 function RecommendStructureReading({ snapshot }: { snapshot: ParserSnapshot }) {
@@ -41,7 +41,7 @@ function RecommendStructureReading({ snapshot }: { snapshot: ParserSnapshot }) {
   return (
     <>
       <strong>已识别 BOSS 推荐页，但候选人结构未匹配</strong>
-      {cardCount !== undefined && <span>旧版卡片匹配 {cardCount}</span>}
+      {cardCount !== undefined && <span>旧选择器命中 {cardCount}</span>}
       {classTokens.length > 0 && (
         <div className="arc-reading__skills" aria-label="页面结构 class">
           {classTokens.map((token) => <span key={token}>{token}</span>)}

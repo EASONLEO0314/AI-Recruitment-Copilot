@@ -16,7 +16,8 @@ export const OBSERVATION_ROOT_SELECTOR = '.card-list, .geek-list-wrap .geek-list
 
 const LOCATION_EXCLUSIONS = /年|学历|本科|硕士|博士|大专/;
 const STRUCTURE_CLASS_FORMAT = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
-const STRUCTURE_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|dialog|drawer|detail|job|expect|advantage|card|list|section|item|content|name|base|info)/i;
+const STRUCTURE_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline)/i;
+const HIGH_INFORMATION_CLASS_KEYWORD = /(?:resume|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline)/i;
 const MAX_STRUCTURE_CLASSES = 18;
 
 
@@ -26,6 +27,8 @@ function structureWarnings(document: Document, cardCount: number): string[] {
     `structure:card-count=${Math.min(cardCount, 50)}`,
   ];
   const seen = new Set<string>();
+  const highInformationClasses: string[] = [];
+  const fallbackClasses: string[] = [];
 
   for (const element of document.querySelectorAll('[class]')) {
     if (isHidden(element)) {
@@ -37,14 +40,23 @@ function structureWarnings(document: Document, cardCount: number): string[] {
         || seen.has(token)) {
         continue;
       }
-      seen.add(token);
-      warnings.push(`structure:class=${token}`);
-      if (seen.size === MAX_STRUCTURE_CLASSES) {
-        return warnings;
+      const target = HIGH_INFORMATION_CLASS_KEYWORD.test(token)
+        ? highInformationClasses
+        : fallbackClasses;
+      if (target.length === MAX_STRUCTURE_CLASSES) {
+        continue;
       }
+      seen.add(token);
+      target.push(token);
     }
   }
 
+  warnings.push(
+    ...highInformationClasses
+      .concat(fallbackClasses)
+      .slice(0, MAX_STRUCTURE_CLASSES)
+      .map((token) => `structure:class=${token}`),
+  );
   return warnings;
 }
 

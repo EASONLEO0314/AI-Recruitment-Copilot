@@ -89,18 +89,24 @@ describe('recommend frame adapter', () => {
     expectNoPageOperations();
   });
 
-  it('reports only bounded structural class diagnostics when the legacy card is absent', () => {
+  it('prioritizes bounded candidate structure diagnostics over job and filter noise', () => {
     const extraClasses = Array.from(
       { length: 24 },
       (_, index) => `candidate-item-${index}`,
     ).join(' ');
     document.body.insertAdjacentHTML('beforeend', `
+      <nav class="tab-list tab-item job-selecter-wrap ui-dropdown-list">
+        <div class="job-list job-item job-mark city-item-active area-item trade-item"></div>
+      </nav>
       <main
         id="sensitive-candidate-id"
         data-private="account-detail"
         class="recommend-detail resume-content unsafe@class tracking-token ${extraClasses}"
       >
-        <section class="candidate-detail section-item history-list work-experience">
+        <section
+          class="candidate-detail work-experience education-experience
+            project-experience geek-advantage history-section"
+        >
           不得进入诊断的候选人正文
         </section>
       </main>`);
@@ -109,18 +115,29 @@ describe('recommend frame adapter', () => {
     const serializedWarnings = JSON.stringify(snapshot.warnings);
 
     expect(snapshot.status).toBe('unsupported');
-    expect(snapshot.warnings.slice(0, 8)).toEqual([
+    expect(snapshot.warnings.slice(0, 10)).toEqual([
       'recommend-active-card-not-found',
       'structure:card-count=0',
       'structure:class=recommend-detail',
       'structure:class=resume-content',
-      'structure:class=candidate-item-0',
-      'structure:class=candidate-item-1',
-      'structure:class=candidate-item-2',
-      'structure:class=candidate-item-3',
+      'structure:class=candidate-detail',
+      'structure:class=work-experience',
+      'structure:class=education-experience',
+      'structure:class=project-experience',
+      'structure:class=geek-advantage',
+      'structure:class=history-section',
     ]);
     expect(snapshot.warnings).toHaveLength(20);
     expect(snapshot.warnings.every((warning) => warning.length <= 160)).toBe(true);
+    expect(serializedWarnings).toContain('structure:class=work-experience');
+    expect(serializedWarnings).toContain('structure:class=education-experience');
+    expect(serializedWarnings).toContain('structure:class=project-experience');
+    expect(serializedWarnings).toContain('structure:class=geek-advantage');
+    expect(serializedWarnings).not.toContain('structure:class=tab-list');
+    expect(serializedWarnings).not.toContain('structure:class=job-item');
+    expect(serializedWarnings).not.toContain('structure:class=city-item-active');
+    expect(serializedWarnings).not.toContain('structure:class=area-item');
+    expect(serializedWarnings).not.toContain('structure:class=trade-item');
     expect(serializedWarnings).not.toContain('候选人正文');
     expect(serializedWarnings).not.toContain('sensitive-candidate-id');
     expect(serializedWarnings).not.toContain('account-detail');
