@@ -7,7 +7,6 @@ import { isHidden } from './dom';
 import { findRecommendObservationRoot, parseRecommendFrame } from './adapters/recommend';
 import { parseResumeFrame } from './adapters/resume';
 import { classifyPage } from './pageClassifier';
-import { probePublicJob, type PublicJobProbeResult } from './publicJobProbe';
 import { buildStatusSnapshot } from './snapshot';
 
 
@@ -28,8 +27,6 @@ export interface CoordinatorOptions {
   runtimeOnMessage?: typeof chrome.runtime.onMessage;
   Observer?: typeof MutationObserver;
   now?: () => Date;
-  publicJobProbe?: (targetDocument: Document) => PublicJobProbeResult;
-  publicJobProbeLogger?: (result: PublicJobProbeResult) => void;
 }
 
 
@@ -128,11 +125,6 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
   const runtimeOnMessage = options.runtimeOnMessage ?? defaultRuntimeOnMessage();
   const Observer = options.Observer ?? defaultObserver();
   const now = options.now ?? (() => new Date());
-  const publicJobProbe = options.publicJobProbe ?? probePublicJob;
-  const publicJobProbeLogger = options.publicJobProbeLogger
-    ?? ((result: PublicJobProbeResult): void => {
-      console.info('[ARC public job probe]', result);
-    });
 
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -208,38 +200,6 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
     emitSnapshot(snapshot, force);
   };
 
-  const runPublicJobProbe = (): void => {
-    if (stopped || !options.isTopFrame) {
-      return;
-    }
-
-    let refreshPageKind: PageKind;
-    try {
-      refreshPageKind = classifyPage(
-        options.targetDocument,
-        options.currentUrl,
-        options.isTopFrame,
-      );
-    } catch {
-      return;
-    }
-    if (refreshPageKind !== 'logged_out') {
-      return;
-    }
-
-    let result: PublicJobProbeResult;
-    try {
-      result = publicJobProbe(options.targetDocument);
-    } catch {
-      result = { status: 'not_found' };
-    }
-    try {
-      publicJobProbeLogger(result);
-    } catch {
-      // Diagnostic logging must not block or leak into a forced parser refresh.
-    }
-  };
-
   const runtimeListener: Parameters<typeof chrome.runtime.onMessage.addListener>[0] = (
     message,
   ) => {
@@ -248,7 +208,6 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
       && message !== null
       && (message as { type?: unknown }).type === 'ARC_PARSER_REFRESH_COMMAND'
     ) {
-      runPublicJobProbe();
       run(true);
     }
   };

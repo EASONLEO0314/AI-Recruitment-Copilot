@@ -193,3 +193,5 @@ npm.cmd run verify
 - Network / localhost health：均未执行，无结论。
 - 归因边界：只能确认时间上的现象，无法确认上述状态由打开 DevTools、会话自身过期、BOSS 机制、扩展或其他因素造成；不能据此推断反爬结论或后续 HR 登录安全性。
 - 后续：进入临时探针强制清理，不再重复本次试探。
+- 清理验证：临时读取器、对应测试、调用点与 `[ARC public job probe]` Console 前缀均已删除；最终构建 `extension/dist/content.js` 的该前缀匹配次数为 0。
+- 完整验证：fresh `npm.cmd run verify` exit 0；后端 12 项测试通过；扩展 14 个测试文件、135 项测试通过、失败 0；类型检查 exit 0；`content.js` 226.53 kB（gzip 70.74 kB），`background.js` 3.96 kB（gzip 1.68 kB）。
