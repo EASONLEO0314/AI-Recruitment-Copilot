@@ -18,12 +18,12 @@ const JOB_CARD_SELECTORS = [
   'article',
   'li',
 ] as const;
+const JOB_CARD_SELECTOR = JOB_CARD_SELECTORS.join(', ');
 const TITLE_SELECTORS = ['.job-name', '.job-title', JOB_LINK_SELECTOR] as const;
 const COMPANY_SELECTORS = ['.company-name', '.company-text'] as const;
 const LOCATION_SELECTORS = ['.job-area', '.job-location'] as const;
 
-const TITLE_MAX_LENGTH = 80;
-const DETAIL_MAX_LENGTH = 160;
+const FIELD_MAX_LENGTH = 80;
 
 
 function boundedFirstText(
@@ -35,38 +35,53 @@ function boundedFirstText(
 }
 
 
-export function probePublicJob(root: ParentNode = document): PublicJobProbeResult {
-  const cards = root.querySelectorAll(JOB_CARD_SELECTORS.join(', '));
-
-  for (const card of cards) {
-    if (isHidden(card)) {
-      continue;
-    }
-
-    const link = Array.from(card.querySelectorAll(JOB_LINK_SELECTOR))
-      .find((candidate) => !isHidden(candidate));
-    if (!link) {
-      continue;
-    }
-
-    const title = boundedFirstText(card, TITLE_SELECTORS, TITLE_MAX_LENGTH);
-    const company = boundedFirstText(card, COMPANY_SELECTORS, DETAIL_MAX_LENGTH);
-    const location = boundedFirstText(card, LOCATION_SELECTORS, DETAIL_MAX_LENGTH);
-    const result: PublicJobProbeResult = {
-      status: title && company && location ? 'success' : 'partial',
-    };
-
-    if (title) {
-      result.title = title;
-    }
-    if (company) {
-      result.company = company;
-    }
-    if (location) {
-      result.location = location;
-    }
-    return result;
+function isProbeHidden(element: Element): boolean {
+  if (isHidden(element)) {
+    return true;
   }
 
-  return { status: 'not_found' };
+  const view = element.ownerDocument.defaultView;
+  if (!view) {
+    return false;
+  }
+
+  for (let current: Element | null = element; current; current = current.parentElement) {
+    const style = view.getComputedStyle(current);
+    if (style.display === 'none' || style.visibility === 'hidden') {
+      return true;
+    }
+  }
+  return false;
+}
+
+
+export function probePublicJob(root: ParentNode = document): PublicJobProbeResult {
+  const link = Array.from(root.querySelectorAll(JOB_LINK_SELECTOR))
+    .find((candidate) => !isProbeHidden(candidate));
+  if (!link) {
+    return { status: 'not_found' };
+  }
+
+  const card = link.closest(JOB_CARD_SELECTOR) ?? link;
+  const title = boundedFirstText(card, TITLE_SELECTORS, FIELD_MAX_LENGTH)
+    ?? (card === link ? normalizeText(link.textContent, FIELD_MAX_LENGTH) || undefined : undefined);
+  const company = boundedFirstText(card, COMPANY_SELECTORS, FIELD_MAX_LENGTH);
+  const location = boundedFirstText(card, LOCATION_SELECTORS, FIELD_MAX_LENGTH);
+  if (!title && !company && !location) {
+    return { status: 'not_found' };
+  }
+
+  const result: PublicJobProbeResult = {
+    status: title && company && location ? 'success' : 'partial',
+  };
+  if (title) {
+    result.title = title;
+  }
+  if (company) {
+    result.company = company;
+  }
+  if (location) {
+    result.location = location;
+  }
+  return result;
 }

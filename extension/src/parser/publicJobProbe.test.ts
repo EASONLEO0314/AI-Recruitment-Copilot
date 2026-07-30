@@ -77,6 +77,37 @@ describe('probePublicJob', () => {
     });
   });
 
+  it('does not combine fields from sibling cards inside an outer candidate', () => {
+    const targetDocument = createDocument(`
+      <article>
+        <div class="job-card-box">
+          <a href="/job_detail/first"><span class="job-name">First role</span></a>
+        </div>
+        <div class="job-card-box">
+          <a href="/job_detail/second"><span class="job-name">Second role</span></a>
+          <span class="company-name">Second company</span>
+          <span class="job-area">Beijing</span>
+        </div>
+      </article>
+    `);
+
+    expect(probePublicJob(targetDocument)).toEqual({
+      status: 'partial',
+      title: 'First role',
+    });
+  });
+
+  it('reads a visible job link without a candidate card container', () => {
+    const targetDocument = createDocument(`
+      <main><div><a href="/job_detail/standalone"> Standalone role </a></div></main>
+    `);
+
+    expect(probePublicJob(targetDocument)).toEqual({
+      status: 'partial',
+      title: 'Standalone role',
+    });
+  });
+
   it('returns only bounded whitelisted partial fields when data is missing', () => {
     const targetDocument = createDocument(`
       <div class="job-card-box" id="sensitive-card-id">
@@ -91,7 +122,7 @@ describe('probePublicJob', () => {
     expect(result).toEqual({
       status: 'partial',
       title: 'Platform Engineer',
-      company: 'C'.repeat(160),
+      company: 'C'.repeat(80),
     });
     expect(Object.keys(result)).toEqual(['status', 'title', 'company']);
     expect(JSON.stringify(result)).not.toContain('sensitive');
@@ -110,7 +141,47 @@ describe('probePublicJob', () => {
     expect(probePublicJob(targetDocument)).toEqual({
       status: 'partial',
       title: 'Role',
-      location: 'L'.repeat(160),
+      location: 'L'.repeat(80),
+    });
+  });
+
+  it('returns not_found when the first visible job link has no readable fields', () => {
+    const targetDocument = createDocument(`
+      <div class="job-card-box"><a href="/job_detail/empty"><span></span></a></div>
+    `);
+
+    expect(probePublicJob(targetDocument)).toEqual({ status: 'not_found' });
+  });
+
+  it('skips a job link hidden by its own inline display style', () => {
+    document.body.innerHTML = `
+      <div class="job-card-box">
+        <a href="/job_detail/hidden" style="display: none">Hidden role</a>
+      </div>
+      <div class="job-card-box">
+        <a href="/job_detail/visible">Visible role</a>
+      </div>
+    `;
+
+    expect(probePublicJob(document)).toEqual({
+      status: 'partial',
+      title: 'Visible role',
+    });
+  });
+
+  it('skips a job card hidden by an ancestor inline visibility style', () => {
+    document.body.innerHTML = `
+      <section style="visibility: hidden">
+        <article><a href="/job_detail/hidden-ancestor">Hidden ancestor role</a></article>
+      </section>
+      <div class="job-card-box">
+        <a href="/job_detail/visible">Visible role</a>
+      </div>
+    `;
+
+    expect(probePublicJob(document)).toEqual({
+      status: 'partial',
+      title: 'Visible role',
     });
   });
 
