@@ -219,7 +219,11 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
     } catch {
       result = { status: 'not_found' };
     }
-    publicJobProbeLogger(result);
+    try {
+      publicJobProbeLogger(result);
+    } catch {
+      // Diagnostic logging must not block or leak into a forced parser refresh.
+    }
   };
 
   const runtimeListener: Parameters<typeof chrome.runtime.onMessage.addListener>[0] = (

@@ -379,6 +379,62 @@ describe('parser coordinator', () => {
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 
+  it('preserves forced refresh when the public job probe logger throws', () => {
+    document.body.innerHTML = '<a>登录/注册</a>';
+    const runtime = createRuntimeOnMessage();
+    const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);
+    const probeResult = {
+      status: 'partial' as const,
+      title: 'Platform Engineer',
+    };
+    const publicJobProbe = vi.fn(() => probeResult);
+    const secret = 'private logger detail';
+    const publicJobProbeLogger = vi.fn(() => {
+      throw new Error(secret);
+    });
+    const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => undefined);
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/',
+      isTopFrame: true,
+      sendMessage,
+      runtimeOnMessage: runtime.event,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+      publicJobProbe,
+      publicJobProbeLogger,
+    });
+    const listener = runtime.getListener();
+
+    try {
+      expect(() => listener?.(
+        { type: 'ARC_PARSER_REFRESH_COMMAND' },
+        {} as chrome.runtime.MessageSender,
+        vi.fn(),
+      )).not.toThrow();
+
+      expect(publicJobProbe).toHaveBeenCalledOnce();
+      expect(publicJobProbeLogger).toHaveBeenCalledOnce();
+      expect(publicJobProbeLogger).toHaveBeenCalledWith(probeResult);
+      expect(sendMessage).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify([
+        consoleInfo.mock.calls,
+        consoleWarn.mock.calls,
+        consoleError.mock.calls,
+        consoleLog.mock.calls,
+      ])).not.toContain(secret);
+    } finally {
+      consoleInfo.mockRestore();
+      consoleWarn.mockRestore();
+      consoleError.mockRestore();
+      consoleLog.mockRestore();
+    }
+  });
+
   it('uses the real public job probe and fixed default logger on manual refresh', () => {
     document.body.innerHTML = `
       <a>登录/注册</a>
