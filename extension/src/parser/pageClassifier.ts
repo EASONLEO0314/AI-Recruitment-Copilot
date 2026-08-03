@@ -1,8 +1,16 @@
 import type { PageKind } from '../contracts';
+import { isHidden } from './dom';
 import { normalizeText } from './snapshot';
 
 
 const LOGIN_LABELS = new Set(['登录', '立即登录', '登录/注册', '扫码登录']);
+
+const RECOMMEND_FRAME_SIGNATURES = [
+  '.dialog-lib-resume .lib-standard-resume',
+  '.dialog-lib-resume .resume-layout-wrap',
+  '.candidate-recommend',
+  '.recommend-wrap',
+] as const;
 
 
 function hasVisibleLoginSignal(targetDocument: Document): boolean {
@@ -13,6 +21,13 @@ function hasVisibleLoginSignal(targetDocument: Document): boolean {
 
     return LOGIN_LABELS.has(normalizeText(element.textContent, 20));
   });
+}
+
+
+function hasVisibleRecommendFrameSignal(targetDocument: Document): boolean {
+  return RECOMMEND_FRAME_SIGNATURES.some((selector) =>
+    Array.from(targetDocument.querySelectorAll(selector)).some((element) => !isHidden(element)),
+  );
 }
 
 
@@ -45,6 +60,10 @@ export function classifyPage(
     || parsedUrl.pathname.startsWith('/web/frame/c-resume/')
   ) {
     return 'resume_frame';
+  }
+
+  if (hasVisibleRecommendFrameSignal(targetDocument)) {
+    return 'recommend_frame';
   }
 
   return 'unsupported';

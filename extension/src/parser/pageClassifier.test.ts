@@ -51,6 +51,44 @@ describe('classifyPage', () => {
     ).toBe(expected);
   });
 
+  it.each([
+    ['recommend list', '<main class="candidate-recommend"></main>'],
+    [
+      'resume dialog',
+      '<div class="dialog-lib-resume"><section class="lib-standard-resume"></section></div>',
+    ],
+  ])('classifies an unknown BOSS child frame from a visible %s signature', (_description, markup) => {
+    expect(
+      classifyPage(
+        createAnonymousDocument(markup),
+        'https://www.zhipin.com/web/frame/unknown',
+        false,
+      ),
+    ).toBe('recommend_frame');
+  });
+
+  it('ignores a hidden candidate structure on an unknown child frame', () => {
+    expect(
+      classifyPage(
+        createAnonymousDocument(
+          '<div hidden><div class="dialog-lib-resume"><div class="lib-standard-resume"></div></div></div>',
+        ),
+        'https://www.zhipin.com/web/frame/unknown',
+        false,
+      ),
+    ).toBe('unsupported');
+  });
+
+  it('does not use a candidate DOM signature outside a BOSS child frame', () => {
+    expect(
+      classifyPage(
+        createAnonymousDocument('<main class="candidate-recommend"></main>'),
+        'https://example.invalid/web/frame/unknown',
+        false,
+      ),
+    ).toBe('unsupported');
+  });
+
   it('does not classify a supported frame path in the top-level page', () => {
     expect(
       classifyPage(
