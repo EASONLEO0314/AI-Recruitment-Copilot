@@ -121,6 +121,79 @@ describe('recommend frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('reads current BOSS resume-section work and education entries', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="dialog-lib-resume">
+        <div class="lib-resume-recommend lib-standard-resume">
+          <div class="resume-detail-wrap">
+            <aside class="resume-anonymous-geek-card">
+              <span class="name">其他推荐候选人</span>
+            </aside>
+            <div class="resume-right-side">
+              <div class="geek-name"><span class="name">候选人丁</span></div>
+            </div>
+            <div class="anonymous-info-labels">
+              <span>上海</span><span>7 年经验</span><span>本科</span>
+            </div>
+            <section class="resume-section geek-work-experience-wrap">
+              <div class="work-wrap">
+                <span class="company-name-wrap">示例科技</span>
+                <span class="position">高级运营</span>
+                <span class="period">2022-2026</span>
+                <p class="item-content">负责增长与数据分析</p>
+              </div>
+              <div class="work-wrap">
+                <span class="company-name">示例网络</span>
+                <span class="position">产品运营</span>
+                <span class="period">2020-2022</span>
+              </div>
+            </section>
+            <section class="resume-section geek-education-experience-wrap">
+              <div class="edu-wrap">
+                <span class="school-name-wrap">示例大学</span>
+                <span class="major">市场营销</span>
+                <span class="degree">本科</span>
+                <span class="period">2016-2020</span>
+              </div>
+            </section>
+            <div class="geek-desc">擅长从零搭建运营体系</div>
+            <span class="skill-tag">数据分析</span>
+          </div>
+        </div>
+      </div>`);
+
+    const snapshot = parseRecommendFrame(document, capturedAt);
+
+    expect(snapshot.profile).toMatchObject({
+      display_name: '候选人丁',
+      location: '上海',
+      experience_years: 7,
+      summary: '擅长从零搭建运营体系',
+      work_experiences: [
+        {
+          company: '示例科技',
+          title: '高级运营',
+          period: '2022-2026',
+          description: '负责增长与数据分析',
+        },
+        {
+          company: '示例网络',
+          title: '产品运营',
+          period: '2020-2022',
+        },
+      ],
+      education: [{
+        school: '示例大学',
+        major: '市场营销',
+        degree: '本科',
+        period: '2016-2020',
+      }],
+      skills: ['数据分析'],
+    });
+    expect(JSON.stringify(snapshot)).not.toContain('其他推荐候选人');
+    expectNoPageOperations();
+  });
+
   it('reports ambiguity when several cards exist and none is selected', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="card-list">

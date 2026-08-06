@@ -10,9 +10,26 @@ import { buildProfileSnapshot, buildStatusSnapshot, normalizeText } from '../sna
 
 
 const RESUME_ROOTS = ['.resume-content', '.resume-box', '.geek-resume', 'main'];
-const SECTION_ROOTS = '.resume-item, .history-section, .section-item';
-const ITEM_ROOTS = ':scope .history-item, :scope .experience-item, :scope .item-content';
-const ITEM_MATCH_SELECTOR = '.history-item, .experience-item, .item-content';
+const SECTION_ROOTS = [
+  '.resume-item',
+  '.history-section',
+  '.section-item',
+  '.resume-section',
+].join(', ');
+const ITEM_ROOTS = [
+  ':scope .history-item',
+  ':scope .experience-item',
+  ':scope .item-content',
+  ':scope .work-wrap',
+  ':scope .edu-wrap',
+].join(', ');
+const ITEM_MATCH_SELECTOR = [
+  '.history-item',
+  '.experience-item',
+  '.item-content',
+  '.work-wrap',
+  '.edu-wrap',
+].join(', ');
 const HEADING_SELECTORS = ['h1', 'h2', 'h3', '.section-title', '.title'];
 
 const WORK_HEADINGS = new Set(['工作经历', '工作经验']);
@@ -20,14 +37,16 @@ const EDUCATION_HEADINGS = new Set(['教育经历', '教育背景']);
 const PROJECT_HEADINGS = new Set(['项目经历', '项目经验']);
 
 const workSelectors = {
-  company: ['.company-name', '.company'],
+  company: ['.company-name', '.company-name-wrap', '.company'],
   title: ['.position-name', '.position'],
   period: ['.date-range', '.period'],
   description: ['.description', '.content'],
 } as const;
 
+const modernWorkDescriptionSelectors = ['.description', '.item-content', '.content'] as const;
+
 const educationSelectors = {
-  school: ['.school-name', '.school'],
+  school: ['.school-name', '.school-name-wrap', '.school'],
   degree: ['.degree-name', '.degree'],
   major: ['.major-name', '.major'],
   period: ['.date-range', '.period'],
@@ -81,12 +100,26 @@ function visibleItems(section: Element): Element[] {
 }
 
 
+function matchesSectionClass(section: Element, kind: 'work' | 'education'): boolean {
+  const selectors = {
+    work: '.geek-work-experience-wrap',
+    education: '.geek-education-experience-wrap',
+  } as const;
+
+  return section.matches(selectors[kind]);
+}
+
+
 function parseWorkSection(section: Element): WorkExperience[] {
   return visibleItems(section).map((item) => ({
     company: firstText(item, workSelectors.company),
     title: firstText(item, workSelectors.title),
     period: firstText(item, workSelectors.period),
-    description: firstText(item, workSelectors.description, 500),
+    description: firstText(
+      item,
+      item.matches('.work-wrap') ? modernWorkDescriptionSelectors : workSelectors.description,
+      500,
+    ),
   })).filter((item) => Object.values(item).some((value) => value !== undefined));
 }
 
@@ -127,11 +160,13 @@ export function parseResumeRoot(
     .filter((section) => !isHidden(section));
   for (const section of sections) {
     const headings = sectionHeadings(section);
-    if (headings.some((heading) => WORK_HEADINGS.has(heading))) {
+    if (matchesSectionClass(section, 'work')
+      || headings.some((heading) => WORK_HEADINGS.has(heading))) {
       const items = parseWorkSection(section);
       workExperiences.push(...items);
       unknownWorkStructure ||= items.length === 0;
-    } else if (headings.some((heading) => EDUCATION_HEADINGS.has(heading))) {
+    } else if (matchesSectionClass(section, 'education')
+      || headings.some((heading) => EDUCATION_HEADINGS.has(heading))) {
       const items = parseEducationSection(section);
       education.push(...items);
       unknownEducationStructure ||= items.length === 0;
@@ -142,7 +177,15 @@ export function parseResumeRoot(
     }
   }
 
-  const baseInfo = allTexts(root, ['.base-info span', '.user-info span'], 80);
+  const baseInfo = allTexts(
+    root,
+    [
+      '.base-info span',
+      '.user-info span',
+      '.anonymous-info-labels span',
+    ],
+    80,
+  );
   const experienceText = baseInfo.find((value) => /\d+\s*年/.test(value));
   const experienceMatch = experienceText?.match(/(\d+)\s*年/);
   const experienceYears = experienceMatch ? Number(experienceMatch[1]) : undefined;
@@ -159,12 +202,17 @@ export function parseResumeRoot(
     project_experiences: projectExperiences,
     skills: allTexts(
       root,
-      ['.skills .tag-item', '.skill-label', '.tags-wrap .tag-item'],
+      [
+        '.skills .tag-item',
+        '.skill-label',
+        '.skill-tag',
+        '.tags-wrap .tag-item',
+      ],
       80,
     ),
     summary: firstText(
       root,
-      ['.candidate-advantage', '.self-description', '.geek-desc .content'],
+      ['.candidate-advantage', '.self-description', '.geek-desc .content', '.geek-desc'],
       500,
     ),
   };
