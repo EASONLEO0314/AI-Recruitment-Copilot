@@ -263,6 +263,7 @@ describe('parser coordinator', () => {
           <div class="resume-right-side">
             <div class="geek-name"><span class="name">候选人戊</span></div>
           </div>
+          <div class="anonymous-info-labels"><span>3 年经验</span></div>
         </div>
       </div>`;
     runtime.getListener()?.(

@@ -31,6 +31,14 @@ const STRUCTURE_CLASS_FORMAT = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
 const STRUCTURE_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline)/i;
 const HIGH_INFORMATION_CLASS_KEYWORD = /(?:resume|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline)/i;
 const MAX_STRUCTURE_CLASSES = 18;
+const MAX_EMPTY_PROFILE_CLASSES = 16;
+const PROFILE_EVIDENCE_FIELDS = new Set([
+  'work_experiences',
+  'education',
+  'project_experiences',
+  'skills',
+  'experience_years',
+]);
 
 
 function structureWarnings(document: Document, cardCount: number): string[] {
@@ -73,6 +81,39 @@ function structureWarnings(document: Document, cardCount: number): string[] {
 }
 
 
+function emptyProfileStructureWarnings(root: Element): string[] {
+  const elements = [root, ...Array.from(root.querySelectorAll('*'))]
+    .filter((element) => !isHidden(element));
+  const iframeCount = elements.filter((element) => element.tagName === 'IFRAME').length;
+  const openShadowCount = elements.filter((element) => element.shadowRoot !== null).length;
+  const seen = new Set<string>();
+  const classWarnings: string[] = [];
+
+  for (const element of elements) {
+    for (const token of element.classList) {
+      if (classWarnings.length === MAX_EMPTY_PROFILE_CLASSES) {
+        break;
+      }
+      if (!STRUCTURE_CLASS_FORMAT.test(token)
+        || !STRUCTURE_CLASS_KEYWORD.test(token)
+        || seen.has(token)) {
+        continue;
+      }
+      seen.add(token);
+      classWarnings.push(`structure:class=${token}`);
+    }
+  }
+
+  return [
+    'recommend-resume-profile-empty',
+    `structure:element-count=${Math.min(elements.length, 999)}`,
+    `structure:iframe-count=${Math.min(iframeCount, 50)}`,
+    `structure:open-shadow-count=${Math.min(openShadowCount, 50)}`,
+    ...classWarnings,
+  ];
+}
+
+
 function findModernResumeRoot(document: Document): Element | undefined {
   for (const selector of MODERN_RESUME_ROOT_SELECTORS) {
     const root = Array.from(document.querySelectorAll(selector))
@@ -94,7 +135,17 @@ export function findRecommendObservationRoot(document: Document): Element | null
 export function parseRecommendFrame(document: Document, now: Date): ParserSnapshot {
   const resumeRoot = findModernResumeRoot(document);
   if (resumeRoot) {
-    return parseResumeRoot(resumeRoot, 'recommend_frame', now);
+    const snapshot = parseResumeRoot(resumeRoot, 'recommend_frame', now);
+    const hasProfileEvidence = snapshot.present_fields
+      .some((field) => PROFILE_EVIDENCE_FIELDS.has(field));
+    if (hasProfileEvidence) {
+      return snapshot;
+    }
+
+    return {
+      ...buildStatusSnapshot('recommend_frame', 'unsupported', undefined, now),
+      warnings: emptyProfileStructureWarnings(resumeRoot),
+    };
   }
 
   const cards = Array.from(document.querySelectorAll(CARD_SELECTOR))

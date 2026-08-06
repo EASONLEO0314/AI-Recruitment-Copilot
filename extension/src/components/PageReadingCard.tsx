@@ -32,6 +32,15 @@ function RecommendStructureReading({ snapshot }: { snapshot: ParserSnapshot }) {
   const cardCountWarning = snapshot.warnings.find((warning) =>
     /^structure:card-count=(?:[0-9]|[1-4][0-9]|50)$/.test(warning));
   const cardCount = cardCountWarning?.slice('structure:card-count='.length);
+  const elementCount = snapshot.warnings
+    .find((warning) => /^structure:element-count=(?:0|[1-9][0-9]{0,2})$/.test(warning))
+    ?.slice('structure:element-count='.length);
+  const iframeCount = snapshot.warnings
+    .find((warning) => /^structure:iframe-count=(?:0|[1-4]?[0-9]|50)$/.test(warning))
+    ?.slice('structure:iframe-count='.length);
+  const openShadowCount = snapshot.warnings
+    .find((warning) => /^structure:open-shadow-count=(?:0|[1-4]?[0-9]|50)$/.test(warning))
+    ?.slice('structure:open-shadow-count='.length);
   const classTokens = snapshot.warnings
     .filter((warning) => warning.startsWith('structure:class='))
     .map((warning) => warning.slice('structure:class='.length))
@@ -42,6 +51,15 @@ function RecommendStructureReading({ snapshot }: { snapshot: ParserSnapshot }) {
     <>
       <strong>已识别 BOSS 推荐页，但候选人结构未匹配</strong>
       {cardCount !== undefined && <span>旧选择器命中 {cardCount}</span>}
+      {(elementCount !== undefined
+        || iframeCount !== undefined
+        || openShadowCount !== undefined) && (
+        <div className="arc-reading__facts" aria-label="页面结构统计">
+          {elementCount !== undefined && <span>可见元素 {elementCount}</span>}
+          {iframeCount !== undefined && <span>iframe {iframeCount}</span>}
+          {openShadowCount !== undefined && <span>开放 Shadow DOM {openShadowCount}</span>}
+        </div>
+      )}
       {classTokens.length > 0 && (
         <div className="arc-reading__skills" aria-label="页面结构 class">
           {classTokens.map((token) => <span key={token}>{token}</span>)}

@@ -194,6 +194,47 @@ describe('recommend frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('reports bounded structure diagnostics instead of a misleading empty profile', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="dialog-lib-resume">
+        <div class="lib-standard-resume">
+          <div
+            id="sensitive-candidate-id"
+            data-private="candidate-detail"
+            class="wasm-resume-layout resume-middle-wrap tracking-token"
+          >
+            不得进入诊断的候选人正文
+            <iframe class="resume-content-frame"></iframe>
+            <div class="shadow-host"></div>
+          </div>
+        </div>
+      </div>`);
+    document.querySelector('.shadow-host')?.attachShadow({ mode: 'open' });
+
+    const snapshot = parseRecommendFrame(document, capturedAt);
+    const serialized = JSON.stringify(snapshot);
+
+    expect(snapshot.status).toBe('unsupported');
+    expect(snapshot).not.toHaveProperty('profile');
+    expect(snapshot.warnings).toContain('recommend-resume-profile-empty');
+    expect(snapshot.warnings).toContain('structure:iframe-count=1');
+    expect(snapshot.warnings).toContain('structure:open-shadow-count=1');
+    expect(snapshot.warnings.some((warning) => /^structure:element-count=\d+$/.test(warning)))
+      .toBe(true);
+    expect(snapshot.warnings).toContain('structure:class=lib-standard-resume');
+    expect(snapshot.warnings).toContain('structure:class=wasm-resume-layout');
+    expect(snapshot.warnings).toContain('structure:class=resume-middle-wrap');
+    expect(snapshot.warnings).toContain('structure:class=resume-content-frame');
+    expect(snapshot.warnings).toHaveLength(8);
+    expect(snapshot.warnings.every((warning) => warning.length <= 160)).toBe(true);
+    expect(serialized).not.toContain('不得进入诊断的候选人正文');
+    expect(serialized).not.toContain('sensitive-candidate-id');
+    expect(serialized).not.toContain('candidate-detail');
+    expect(serialized).not.toContain('tracking-token');
+    expect(serialized).not.toContain('shadow-host');
+    expectNoPageOperations();
+  });
+
   it('reports ambiguity when several cards exist and none is selected', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="card-list">

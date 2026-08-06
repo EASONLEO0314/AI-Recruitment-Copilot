@@ -125,6 +125,9 @@ describe('PageReadingCard', () => {
       warnings: [
         'recommend-active-card-not-found',
         'structure:card-count=0',
+        'structure:element-count=4',
+        'structure:iframe-count=1',
+        'structure:open-shadow-count=1',
         'structure:class=recommend-detail',
         'structure:class=resume-content',
         'structure:class=job-item',
@@ -138,6 +141,9 @@ describe('PageReadingCard', () => {
     expect(screen.getByText('旧选择器命中 0')).toBeInTheDocument();
     expect(screen.getByText('recommend-detail')).toBeInTheDocument();
     expect(screen.getByText('resume-content')).toBeInTheDocument();
+    expect(screen.getByText('可见元素 4')).toBeInTheDocument();
+    expect(screen.getByText('iframe 1')).toBeInTheDocument();
+    expect(screen.getByText('开放 Shadow DOM 1')).toBeInTheDocument();
     expect(screen.queryByText('job-item')).not.toBeInTheDocument();
     expect(screen.queryByText('arbitrary-private-detail')).not.toBeInTheDocument();
     expect(screen.queryByText('recommend-active-card-not-found')).not.toBeInTheDocument();
