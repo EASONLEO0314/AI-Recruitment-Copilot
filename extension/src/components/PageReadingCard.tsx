@@ -26,6 +26,19 @@ const CORE_PROFILE_FIELDS = new Set([
 
 const STRUCTURE_CLASS_FORMAT = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
 const STRUCTURE_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline)/i;
+const STRUCTURE_TOPOLOGY_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline|title|item|content|section|box|header|body|summary|greet)/i;
+
+
+function structureNodeLabel(value: string): string | undefined {
+  const tokens = value.split('+');
+  if (tokens.length === 0
+    || tokens.length > 3
+    || tokens.some((token) => !STRUCTURE_CLASS_FORMAT.test(token)
+      || !STRUCTURE_TOPOLOGY_CLASS_KEYWORD.test(token))) {
+    return undefined;
+  }
+  return tokens.join(' + ');
+}
 
 
 function RecommendStructureReading({ snapshot }: { snapshot: ParserSnapshot }) {
@@ -46,6 +59,25 @@ function RecommendStructureReading({ snapshot }: { snapshot: ParserSnapshot }) {
     .map((warning) => warning.slice('structure:class='.length))
     .filter((token) => STRUCTURE_CLASS_FORMAT.test(token) && STRUCTURE_CLASS_KEYWORD.test(token))
     .slice(0, 18);
+  const classCounts = snapshot.warnings.flatMap((warning) => {
+    const match = warning.match(/^structure:class-count=([A-Za-z][A-Za-z0-9_-]{0,47}):([1-9][0-9]{0,2})$/);
+    if (!match || !STRUCTURE_TOPOLOGY_CLASS_KEYWORD.test(match[1])) {
+      return [];
+    }
+    return [{ token: match[1], count: match[2] }];
+  }).slice(0, 16);
+  const structureEdges = snapshot.warnings.flatMap((warning) => {
+    if (!warning.startsWith('structure:edge=')) {
+      return [];
+    }
+    const nodes = warning.slice('structure:edge='.length).split('>');
+    if (nodes.length !== 2) {
+      return [];
+    }
+    const parent = structureNodeLabel(nodes[0]);
+    const child = structureNodeLabel(nodes[1]);
+    return parent && child ? [`${parent} → ${child}`] : [];
+  }).slice(0, 16);
 
   return (
     <>
@@ -63,6 +95,18 @@ function RecommendStructureReading({ snapshot }: { snapshot: ParserSnapshot }) {
       {classTokens.length > 0 && (
         <div className="arc-reading__skills" aria-label="页面结构 class">
           {classTokens.map((token) => <span key={token}>{token}</span>)}
+        </div>
+      )}
+      {classCounts.length > 0 && (
+        <div className="arc-reading__skills" aria-label="页面结构 class 计数">
+          {classCounts.map(({ token, count }) => (
+            <span key={token}>{token} ×{count}</span>
+          ))}
+        </div>
+      )}
+      {structureEdges.length > 0 && (
+        <div className="arc-reading__topology" aria-label="页面结构父子关系">
+          {structureEdges.map((edge) => <span key={edge}>{edge}</span>)}
         </div>
       )}
       <small>仅显示结构标识，不包含候选人正文</small>

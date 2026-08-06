@@ -221,11 +221,16 @@ describe('recommend frame adapter', () => {
     expect(snapshot.warnings).toContain('structure:open-shadow-count=1');
     expect(snapshot.warnings.some((warning) => /^structure:element-count=\d+$/.test(warning)))
       .toBe(true);
-    expect(snapshot.warnings).toContain('structure:class=lib-standard-resume');
-    expect(snapshot.warnings).toContain('structure:class=wasm-resume-layout');
-    expect(snapshot.warnings).toContain('structure:class=resume-middle-wrap');
-    expect(snapshot.warnings).toContain('structure:class=resume-content-frame');
-    expect(snapshot.warnings).toHaveLength(8);
+    expect(snapshot.warnings).toContain('structure:class-count=lib-standard-resume:1');
+    expect(snapshot.warnings).toContain('structure:class-count=wasm-resume-layout:1');
+    expect(snapshot.warnings).toContain('structure:class-count=resume-middle-wrap:1');
+    expect(snapshot.warnings).toContain('structure:class-count=resume-content-frame:1');
+    expect(snapshot.warnings).toContain(
+      'structure:edge=lib-standard-resume>wasm-resume-layout+resume-middle-wrap',
+    );
+    expect(snapshot.warnings).toContain(
+      'structure:edge=wasm-resume-layout+resume-middle-wrap>resume-content-frame',
+    );
     expect(snapshot.warnings.every((warning) => warning.length <= 160)).toBe(true);
     expect(serialized).not.toContain('不得进入诊断的候选人正文');
     expect(serialized).not.toContain('sensitive-candidate-id');
@@ -247,8 +252,34 @@ describe('recommend frame adapter', () => {
     expect(snapshot.status).toBe('unsupported');
     expect(snapshot.warnings).toContain('recommend-resume-profile-empty');
     expect(snapshot.warnings).toContain('structure:iframe-count=1');
-    expect(snapshot.warnings).toContain('structure:class=resume-detail-wrap');
-    expect(snapshot.warnings).toContain('structure:class=wasm-resume-layout');
+    expect(snapshot.warnings).toContain('structure:class-count=resume-detail-wrap:1');
+    expect(snapshot.warnings).toContain('structure:class-count=wasm-resume-layout:1');
+    expectNoPageOperations();
+  });
+
+  it('reports bounded anonymous class counts and nearest structure edges', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="lib-standard-resume">
+        <div class="resume-detail-wrap">
+          <section class="resume-simple-box">
+            <article class="resume-item-detail"></article>
+            <article class="resume-item-detail education"></article>
+          </section>
+          <section class="resume-simple-box"></section>
+        </div>
+      </main>`);
+
+    const snapshot = parseRecommendFrame(document, capturedAt);
+
+    expect(snapshot.warnings).toContain('structure:class-count=resume-simple-box:2');
+    expect(snapshot.warnings).toContain('structure:class-count=resume-item-detail:2');
+    expect(snapshot.warnings).toContain(
+      'structure:edge=resume-detail-wrap>resume-simple-box',
+    );
+    expect(snapshot.warnings).toContain(
+      'structure:edge=resume-simple-box>resume-item-detail+education',
+    );
+    expect(snapshot.warnings.every((warning) => warning.length <= 160)).toBe(true);
     expectNoPageOperations();
   });
 

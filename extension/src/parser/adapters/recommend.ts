@@ -34,8 +34,10 @@ const LOCATION_EXCLUSIONS = /年|学历|本科|硕士|博士|大专/;
 const STRUCTURE_CLASS_FORMAT = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
 const STRUCTURE_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline)/i;
 const HIGH_INFORMATION_CLASS_KEYWORD = /(?:resume|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline)/i;
+const TOPOLOGY_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline|title|item|content|section|box|header|body|summary|greet)/i;
 const MAX_STRUCTURE_CLASSES = 18;
 const MAX_EMPTY_PROFILE_CLASSES = 16;
+const MAX_EMPTY_PROFILE_EDGES = 16;
 const PROFILE_EVIDENCE_FIELDS = new Set([
   'work_experiences',
   'education',
@@ -90,21 +92,51 @@ function emptyProfileStructureWarnings(root: Element): string[] {
     .filter((element) => !isHidden(element));
   const iframeCount = elements.filter((element) => element.tagName === 'IFRAME').length;
   const openShadowCount = elements.filter((element) => element.shadowRoot !== null).length;
-  const seen = new Set<string>();
-  const classWarnings: string[] = [];
+  const classCounts = new Map<string, number>();
+  const tokensByElement = new Map<Element, string[]>();
 
   for (const element of elements) {
-    for (const token of element.classList) {
-      if (classWarnings.length === MAX_EMPTY_PROFILE_CLASSES) {
+    const tokens = Array.from(element.classList)
+      .filter((token) => STRUCTURE_CLASS_FORMAT.test(token)
+        && TOPOLOGY_CLASS_KEYWORD.test(token));
+    tokensByElement.set(element, tokens);
+    for (const token of tokens) {
+      const count = classCounts.get(token);
+      if (count !== undefined) {
+        classCounts.set(token, Math.min(count + 1, 999));
+      } else if (classCounts.size < MAX_EMPTY_PROFILE_CLASSES) {
+        classCounts.set(token, 1);
+      }
+    }
+  }
+
+  const selectedTokens = new Set(classCounts.keys());
+  const edgeWarnings: string[] = [];
+  const seenEdges = new Set<string>();
+  for (const element of elements) {
+    const childTokens = (tokensByElement.get(element) ?? [])
+      .filter((token) => selectedTokens.has(token))
+      .slice(0, 3);
+    if (childTokens.length === 0) {
+      continue;
+    }
+
+    let ancestor = element.parentElement;
+    while (ancestor && root.contains(ancestor)) {
+      const parentTokens = (tokensByElement.get(ancestor) ?? [])
+        .filter((token) => selectedTokens.has(token))
+        .slice(0, 3);
+      if (parentTokens.length > 0) {
+        const warning = `structure:edge=${parentTokens.join('+')}>${childTokens.join('+')}`;
+        if (warning.length <= 160
+          && !seenEdges.has(warning)
+          && edgeWarnings.length < MAX_EMPTY_PROFILE_EDGES) {
+          seenEdges.add(warning);
+          edgeWarnings.push(warning);
+        }
         break;
       }
-      if (!STRUCTURE_CLASS_FORMAT.test(token)
-        || !STRUCTURE_CLASS_KEYWORD.test(token)
-        || seen.has(token)) {
-        continue;
-      }
-      seen.add(token);
-      classWarnings.push(`structure:class=${token}`);
+      ancestor = ancestor.parentElement;
     }
   }
 
@@ -113,7 +145,9 @@ function emptyProfileStructureWarnings(root: Element): string[] {
     `structure:element-count=${Math.min(elements.length, 999)}`,
     `structure:iframe-count=${Math.min(iframeCount, 50)}`,
     `structure:open-shadow-count=${Math.min(openShadowCount, 50)}`,
-    ...classWarnings,
+    ...Array.from(classCounts, ([token, count]) =>
+      `structure:class-count=${token}:${count}`),
+    ...edgeWarnings,
   ];
 }
 

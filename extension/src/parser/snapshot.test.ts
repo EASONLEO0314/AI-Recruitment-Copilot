@@ -206,7 +206,8 @@ describe('parser snapshot boundary', () => {
       },
     })).toBe(false);
     expect(isParserSnapshot({ ...valid, captured_at: 'not-a-date' })).toBe(false);
-    expect(isParserSnapshot({ ...valid, warnings: Array(21).fill('warning') })).toBe(false);
+    expect(isParserSnapshot({ ...valid, warnings: Array(40).fill('warning') })).toBe(true);
+    expect(isParserSnapshot({ ...valid, warnings: Array(41).fill('warning') })).toBe(false);
     expect(isParserSnapshot({
       ...valid,
       profile: { ...valid.profile, experience_years: 3.5 },

@@ -130,6 +130,10 @@ describe('PageReadingCard', () => {
         'structure:open-shadow-count=1',
         'structure:class=recommend-detail',
         'structure:class=resume-content',
+        'structure:class-count=resume-simple-box:2',
+        'structure:class-count=resume-item-detail:3',
+        'structure:edge=resume-detail-wrap>resume-simple-box',
+        'structure:edge=resume-simple-box>resume-item-detail+education',
         'structure:class=job-item',
         'arbitrary-private-detail',
       ],
@@ -141,6 +145,12 @@ describe('PageReadingCard', () => {
     expect(screen.getByText('旧选择器命中 0')).toBeInTheDocument();
     expect(screen.getByText('recommend-detail')).toBeInTheDocument();
     expect(screen.getByText('resume-content')).toBeInTheDocument();
+    expect(screen.getByText('resume-simple-box ×2')).toBeInTheDocument();
+    expect(screen.getByText('resume-item-detail ×3')).toBeInTheDocument();
+    expect(screen.getByText('resume-detail-wrap → resume-simple-box')).toBeInTheDocument();
+    expect(screen.getByText(
+      'resume-simple-box → resume-item-detail + education',
+    )).toBeInTheDocument();
     expect(screen.getByText('可见元素 4')).toBeInTheDocument();
     expect(screen.getByText('iframe 1')).toBeInTheDocument();
     expect(screen.getByText('开放 Shadow DOM 1')).toBeInTheDocument();

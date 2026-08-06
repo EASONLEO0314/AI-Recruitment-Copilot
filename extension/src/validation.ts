@@ -218,5 +218,5 @@ export function isParserSnapshot(value: unknown): value is ParserSnapshot {
     && (!('profile' in value) || isCandidateProfile(value.profile))
     && isBoundedStringArray(value.present_fields, 50)
     && isBoundedStringArray(value.missing_fields, 50)
-    && isBoundedStringArray(value.warnings, 20);
+    && isBoundedStringArray(value.warnings, 40);
 }
