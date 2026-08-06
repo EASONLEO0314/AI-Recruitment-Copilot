@@ -87,6 +87,7 @@ export interface EducationExperience {
   degree?: string;
   major?: string;
   period?: string;
+  raw_text?: string;
 }
 
 export interface WorkExperience {
@@ -94,6 +95,7 @@ export interface WorkExperience {
   title?: string;
   period?: string;
   description?: string;
+  raw_text?: string;
 }
 
 export interface ProjectExperience {
@@ -101,6 +103,7 @@ export interface ProjectExperience {
   role?: string;
   period?: string;
   description?: string;
+  raw_text?: string;
 }
 
 export interface CandidateProfile {

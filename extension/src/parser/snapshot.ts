@@ -26,6 +26,8 @@ const NON_CORE_FIELDS = [
   'summary',
 ] as const;
 
+export const RESUME_ITEM_RAW_TEXT_MAX_LENGTH = 2_000;
+
 
 export function normalizeText(value: string | null | undefined, maxLength = 500): string {
   return (value ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
@@ -52,6 +54,12 @@ function sanitizeEducation(items: EducationExperience[]): EducationExperience[] 
     setNormalizedString(sanitized, 'degree', item.degree);
     setNormalizedString(sanitized, 'major', item.major);
     setNormalizedString(sanitized, 'period', item.period);
+    setNormalizedString(
+      sanitized,
+      'raw_text',
+      item.raw_text,
+      RESUME_ITEM_RAW_TEXT_MAX_LENGTH,
+    );
     return sanitized;
   }).filter((item) => Object.keys(item).length > 0).slice(0, 50);
 }
@@ -64,6 +72,12 @@ function sanitizeWork(items: WorkExperience[]): WorkExperience[] {
     setNormalizedString(sanitized, 'title', item.title);
     setNormalizedString(sanitized, 'period', item.period);
     setNormalizedString(sanitized, 'description', item.description, 500);
+    setNormalizedString(
+      sanitized,
+      'raw_text',
+      item.raw_text,
+      RESUME_ITEM_RAW_TEXT_MAX_LENGTH,
+    );
     return sanitized;
   }).filter((item) => Object.keys(item).length > 0).slice(0, 50);
 }
@@ -76,6 +90,12 @@ function sanitizeProjects(items: ProjectExperience[]): ProjectExperience[] {
     setNormalizedString(sanitized, 'role', item.role);
     setNormalizedString(sanitized, 'period', item.period);
     setNormalizedString(sanitized, 'description', item.description, 500);
+    setNormalizedString(
+      sanitized,
+      'raw_text',
+      item.raw_text,
+      RESUME_ITEM_RAW_TEXT_MAX_LENGTH,
+    );
     return sanitized;
   }).filter((item) => Object.keys(item).length > 0).slice(0, 50);
 }

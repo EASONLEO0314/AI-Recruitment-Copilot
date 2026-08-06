@@ -125,9 +125,9 @@ const PROFILE_KEYS = [
   'summary',
 ] as const;
 
-const EDUCATION_KEYS = ['school', 'degree', 'major', 'period'] as const;
-const WORK_KEYS = ['company', 'title', 'period', 'description'] as const;
-const PROJECT_KEYS = ['name', 'role', 'period', 'description'] as const;
+const EDUCATION_KEYS = ['school', 'degree', 'major', 'period', 'raw_text'] as const;
+const WORK_KEYS = ['company', 'title', 'period', 'description', 'raw_text'] as const;
+const PROJECT_KEYS = ['name', 'role', 'period', 'description', 'raw_text'] as const;
 
 const PAGE_KINDS = [
   'logged_out',
@@ -143,7 +143,9 @@ const PARSER_STATUSES = ['waiting', 'ready', 'partial', 'unsupported', 'error'] 
 function isEducationExperience(value: unknown): boolean {
   return isRecord(value)
     && hasOnlyKeys(value, EDUCATION_KEYS)
-    && EDUCATION_KEYS.every((key) => isOptionalSafeString(value, key));
+    && ['school', 'degree', 'major', 'period']
+      .every((key) => isOptionalSafeString(value, key))
+    && isOptionalSafeString(value, 'raw_text', 2_000);
 }
 
 
@@ -153,7 +155,8 @@ function isWorkExperience(value: unknown): boolean {
     && isOptionalSafeString(value, 'company')
     && isOptionalSafeString(value, 'title')
     && isOptionalSafeString(value, 'period')
-    && isOptionalSafeString(value, 'description', 500);
+    && isOptionalSafeString(value, 'description', 500)
+    && isOptionalSafeString(value, 'raw_text', 2_000);
 }
 
 
@@ -163,7 +166,8 @@ function isProjectExperience(value: unknown): boolean {
     && isOptionalSafeString(value, 'name')
     && isOptionalSafeString(value, 'role')
     && isOptionalSafeString(value, 'period')
-    && isOptionalSafeString(value, 'description', 500);
+    && isOptionalSafeString(value, 'description', 500)
+    && isOptionalSafeString(value, 'raw_text', 2_000);
 }
 
 

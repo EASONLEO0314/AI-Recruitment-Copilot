@@ -62,14 +62,27 @@ describe('parser snapshot boundary', () => {
       experience_years: 81,
       expected_position: '  平台\n工程师 ',
       education: [
-        { school: '  示例大学 ', degree: '   ', major: ' 计算机 ' },
+        {
+          school: '  示例大学 ',
+          degree: '   ',
+          major: ' 计算机 ',
+          raw_text: ' 示例大学\n计算机 本科 ',
+        },
         { school: '   ' },
       ],
       work_experiences: [
-        { company: ' 示例公司 ', description: ` ${'d'.repeat(510)} ` },
+        {
+          company: ' 示例公司 ',
+          description: ` ${'d'.repeat(510)} `,
+          raw_text: ` ${'工'.repeat(2_010)} `,
+        },
         { title: '   ' },
       ],
-      project_experiences: [{ name: ' 匿名项目 ', description: '  项目\n说明 ' }],
+      project_experiences: [{
+        name: ' 匿名项目 ',
+        description: '  项目\n说明 ',
+        raw_text: ' 匿名项目\n负责数据分析 ',
+      }],
       skills: [' TypeScript ', 'TypeScript', '   ', ...Array.from({ length: 55 }, (_, index) => `技能${index}`)],
       summary: ` ${'s'.repeat(510)} `,
     };
@@ -82,9 +95,21 @@ describe('parser snapshot boundary', () => {
       display_name: '候选人乙',
       current_title: 'T'.repeat(160),
       expected_position: '平台 工程师',
-      education: [{ school: '示例大学', major: '计算机' }],
-      work_experiences: [{ company: '示例公司', description: 'd'.repeat(500) }],
-      project_experiences: [{ name: '匿名项目', description: '项目 说明' }],
+      education: [{
+        school: '示例大学',
+        major: '计算机',
+        raw_text: '示例大学 计算机 本科',
+      }],
+      work_experiences: [{
+        company: '示例公司',
+        description: 'd'.repeat(500),
+        raw_text: '工'.repeat(2_000),
+      }],
+      project_experiences: [{
+        name: '匿名项目',
+        description: '项目 说明',
+        raw_text: '匿名项目 负责数据分析',
+      }],
       summary: 's'.repeat(500),
     });
     expect(snapshot.profile?.experience_years).toBeUndefined();
@@ -189,6 +214,13 @@ describe('parser snapshot boundary', () => {
     expect(isParserSnapshot({
       ...valid,
       profile: { ...valid.profile, work_experiences: Array(51).fill({ title: '工程师' }) },
+    })).toBe(false);
+    expect(isParserSnapshot({
+      ...valid,
+      profile: {
+        ...valid.profile,
+        education: [{ raw_text: 'x'.repeat(2_001) }],
+      },
     })).toBe(false);
   });
 });
