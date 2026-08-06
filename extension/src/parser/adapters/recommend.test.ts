@@ -252,6 +252,80 @@ describe('recommend frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('counts current BOSS semantic sections and preserves each visible item text', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="lib-standard-resume wasm-resume-layout">
+        <div class="lib-resume-recommend resume-layout-wrap">
+          <div class="resume-middle-wrap resume-center-side">
+            <div class="resume-detail-wrap">
+              <section class="resume-simple-box">
+                <h3 class="title">工作经历</h3>
+                <article class="resume-item-detail">
+                  示例科技 平台工程师 2022-2026
+                  <p>负责数据平台建设</p>
+                </article>
+                <article class="resume-item-detail">
+                  示例网络 数据工程师 2020-2022
+                </article>
+                <article class="resume-item-detail" hidden>隐藏工作</article>
+              </section>
+              <section class="resume-simple-box education">
+                <h3 class="title">教育经历</h3>
+                <article class="resume-item-detail">
+                  示例大学 计算机 本科 2016-2020
+                </article>
+              </section>
+              <section class="resume-simple-box">
+                <h3 class="title">项目经历</h3>
+                <article class="resume-item-detail">
+                  匿名项目 负责核心模块
+                </article>
+              </section>
+              <section class="resume-simple-box">
+                <h3 class="title">个人优势</h3>
+                <article class="resume-item-detail">不应归入经历</article>
+              </section>
+            </div>
+          </div>
+        </div>
+      </main>`);
+
+    const snapshot = parseRecommendFrame(document, capturedAt);
+
+    expect(snapshot.profile?.work_experiences).toEqual([
+      { raw_text: '示例科技 平台工程师 2022-2026 负责数据平台建设' },
+      { raw_text: '示例网络 数据工程师 2020-2022' },
+    ]);
+    expect(snapshot.profile?.education).toEqual([
+      { raw_text: '示例大学 计算机 本科 2016-2020' },
+    ]);
+    expect(snapshot.profile?.project_experiences).toEqual([
+      { raw_text: '匿名项目 负责核心模块' },
+    ]);
+    expect(snapshot.warnings).toContain('resume-section-kind-unknown');
+    expect(JSON.stringify(snapshot)).not.toContain('隐藏工作');
+    expect(JSON.stringify(snapshot)).not.toContain('不应归入经历');
+    expectNoPageOperations();
+  });
+
+  it('bounds current BOSS raw item text and reports truncation', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="resume-detail-wrap">
+        <section class="resume-simple-box">
+          <h3 class="title">工作经历</h3>
+          <article class="resume-item-detail">${'工'.repeat(2_010)}</article>
+        </section>
+      </div>`);
+
+    const snapshot = parseRecommendFrame(document, capturedAt);
+
+    expect(snapshot.profile?.work_experiences).toEqual([
+      { raw_text: '工'.repeat(2_000) },
+    ]);
+    expect(snapshot.warnings).toContain('resume-item-raw-text-truncated');
+    expectNoPageOperations();
+  });
+
   it('reports ambiguity when several cards exist and none is selected', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="card-list">

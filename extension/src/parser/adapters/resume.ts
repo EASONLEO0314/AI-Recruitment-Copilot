@@ -5,8 +5,13 @@ import type {
   ProjectExperience,
   WorkExperience,
 } from '../../contracts';
-import { allTexts, firstText, isHidden } from '../dom';
-import { buildProfileSnapshot, buildStatusSnapshot, normalizeText } from '../snapshot';
+import { allTexts, firstText, isHidden, visibleText } from '../dom';
+import {
+  buildProfileSnapshot,
+  buildStatusSnapshot,
+  normalizeText,
+  RESUME_ITEM_RAW_TEXT_MAX_LENGTH,
+} from '../snapshot';
 
 
 const RESUME_ROOTS = ['.resume-content', '.resume-box', '.geek-resume', 'main'];
@@ -15,6 +20,7 @@ const SECTION_ROOTS = [
   '.history-section',
   '.section-item',
   '.resume-section',
+  '.resume-simple-box',
 ].join(', ');
 const ITEM_ROOTS = [
   ':scope .history-item',
@@ -22,6 +28,7 @@ const ITEM_ROOTS = [
   ':scope .item-content',
   ':scope .work-wrap',
   ':scope .edu-wrap',
+  ':scope .resume-item-detail',
 ].join(', ');
 const ITEM_MATCH_SELECTOR = [
   '.history-item',
@@ -29,6 +36,7 @@ const ITEM_MATCH_SELECTOR = [
   '.item-content',
   '.work-wrap',
   '.edu-wrap',
+  '.resume-item-detail',
 ].join(', ');
 const HEADING_SELECTORS = ['h1', 'h2', 'h3', '.section-title', '.title'];
 
@@ -60,6 +68,18 @@ const projectSelectors = {
 } as const;
 
 const LOCATION_EXCLUSIONS = /年|学历|本科|硕士|博士|大专/;
+
+type SectionKind = 'work' | 'education' | 'project';
+
+interface ParsedSection<T> {
+  items: T[];
+  rawTextTruncated: boolean;
+}
+
+interface RawItemText {
+  rawText?: string;
+  truncated: boolean;
+}
 
 
 function findResumeRoot(document: Document): Element | undefined {
@@ -100,47 +120,93 @@ function visibleItems(section: Element): Element[] {
 }
 
 
-function matchesSectionClass(section: Element, kind: 'work' | 'education'): boolean {
-  const selectors = {
-    work: '.geek-work-experience-wrap',
-    education: '.geek-education-experience-wrap',
-  } as const;
-
-  return section.matches(selectors[kind]);
+function findSectionKind(section: Element, headings: string[]): SectionKind | undefined {
+  if (section.matches('.geek-work-experience-wrap')) {
+    return 'work';
+  }
+  if (section.matches('.geek-education-experience-wrap, .resume-simple-box.education')) {
+    return 'education';
+  }
+  if (headings.some((heading) => WORK_HEADINGS.has(heading))) {
+    return 'work';
+  }
+  if (headings.some((heading) => EDUCATION_HEADINGS.has(heading))) {
+    return 'education';
+  }
+  if (headings.some((heading) => PROJECT_HEADINGS.has(heading))) {
+    return 'project';
+  }
+  return undefined;
 }
 
 
-function parseWorkSection(section: Element): WorkExperience[] {
-  return visibleItems(section).map((item) => ({
-    company: firstText(item, workSelectors.company),
-    title: firstText(item, workSelectors.title),
-    period: firstText(item, workSelectors.period),
-    description: firstText(
-      item,
-      item.matches('.work-wrap') ? modernWorkDescriptionSelectors : workSelectors.description,
-      500,
-    ),
-  })).filter((item) => Object.values(item).some((value) => value !== undefined));
+function readRawItemText(item: Element): RawItemText {
+  const value = visibleText(item, RESUME_ITEM_RAW_TEXT_MAX_LENGTH + 1);
+  if (!value) {
+    return { truncated: false };
+  }
+  return {
+    rawText: value.slice(0, RESUME_ITEM_RAW_TEXT_MAX_LENGTH),
+    truncated: value.length > RESUME_ITEM_RAW_TEXT_MAX_LENGTH,
+  };
 }
 
 
-function parseEducationSection(section: Element): EducationExperience[] {
-  return visibleItems(section).map((item) => ({
-    school: firstText(item, educationSelectors.school),
-    degree: firstText(item, educationSelectors.degree),
-    major: firstText(item, educationSelectors.major),
-    period: firstText(item, educationSelectors.period),
-  })).filter((item) => Object.values(item).some((value) => value !== undefined));
+function parseWorkSection(section: Element): ParsedSection<WorkExperience> {
+  let rawTextTruncated = false;
+  const items = visibleItems(section).map((item) => {
+    const rawText = readRawItemText(item);
+    rawTextTruncated ||= rawText.truncated;
+    return {
+      company: firstText(item, workSelectors.company),
+      title: firstText(item, workSelectors.title),
+      period: firstText(item, workSelectors.period),
+      description: firstText(
+        item,
+        item.matches('.work-wrap') ? modernWorkDescriptionSelectors : workSelectors.description,
+        500,
+      ),
+      raw_text: rawText.rawText,
+    };
+  }).filter((item) => Object.values(item).some((value) => value !== undefined));
+
+  return { items, rawTextTruncated };
 }
 
 
-function parseProjectSection(section: Element): ProjectExperience[] {
-  return visibleItems(section).map((item) => ({
-    name: firstText(item, projectSelectors.name),
-    role: firstText(item, projectSelectors.role),
-    period: firstText(item, projectSelectors.period),
-    description: firstText(item, projectSelectors.description, 500),
-  })).filter((item) => Object.values(item).some((value) => value !== undefined));
+function parseEducationSection(section: Element): ParsedSection<EducationExperience> {
+  let rawTextTruncated = false;
+  const items = visibleItems(section).map((item) => {
+    const rawText = readRawItemText(item);
+    rawTextTruncated ||= rawText.truncated;
+    return {
+      school: firstText(item, educationSelectors.school),
+      degree: firstText(item, educationSelectors.degree),
+      major: firstText(item, educationSelectors.major),
+      period: firstText(item, educationSelectors.period),
+      raw_text: rawText.rawText,
+    };
+  }).filter((item) => Object.values(item).some((value) => value !== undefined));
+
+  return { items, rawTextTruncated };
+}
+
+
+function parseProjectSection(section: Element): ParsedSection<ProjectExperience> {
+  let rawTextTruncated = false;
+  const items = visibleItems(section).map((item) => {
+    const rawText = readRawItemText(item);
+    rawTextTruncated ||= rawText.truncated;
+    return {
+      name: firstText(item, projectSelectors.name),
+      role: firstText(item, projectSelectors.role),
+      period: firstText(item, projectSelectors.period),
+      description: firstText(item, projectSelectors.description, 500),
+      raw_text: rawText.rawText,
+    };
+  }).filter((item) => Object.values(item).some((value) => value !== undefined));
+
+  return { items, rawTextTruncated };
 }
 
 
@@ -155,25 +221,35 @@ export function parseResumeRoot(
   let unknownWorkStructure = false;
   let unknownEducationStructure = false;
   let unknownProjectStructure = false;
+  let unknownSectionKind = false;
+  let rawTextTruncated = false;
 
   const sections = Array.from(root.querySelectorAll(SECTION_ROOTS))
     .filter((section) => !isHidden(section));
   for (const section of sections) {
     const headings = sectionHeadings(section);
-    if (matchesSectionClass(section, 'work')
-      || headings.some((heading) => WORK_HEADINGS.has(heading))) {
-      const items = parseWorkSection(section);
-      workExperiences.push(...items);
-      unknownWorkStructure ||= items.length === 0;
-    } else if (matchesSectionClass(section, 'education')
-      || headings.some((heading) => EDUCATION_HEADINGS.has(heading))) {
-      const items = parseEducationSection(section);
-      education.push(...items);
-      unknownEducationStructure ||= items.length === 0;
-    } else if (headings.some((heading) => PROJECT_HEADINGS.has(heading))) {
-      const items = parseProjectSection(section);
-      projectExperiences.push(...items);
-      unknownProjectStructure ||= items.length === 0;
+    const kind = findSectionKind(section, headings);
+    if (!kind) {
+      unknownSectionKind ||= section.matches('.resume-simple-box')
+        && visibleItems(section).length > 0;
+      continue;
+    }
+
+    if (kind === 'work') {
+      const parsed = parseWorkSection(section);
+      workExperiences.push(...parsed.items);
+      unknownWorkStructure ||= parsed.items.length === 0;
+      rawTextTruncated ||= parsed.rawTextTruncated;
+    } else if (kind === 'education') {
+      const parsed = parseEducationSection(section);
+      education.push(...parsed.items);
+      unknownEducationStructure ||= parsed.items.length === 0;
+      rawTextTruncated ||= parsed.rawTextTruncated;
+    } else {
+      const parsed = parseProjectSection(section);
+      projectExperiences.push(...parsed.items);
+      unknownProjectStructure ||= parsed.items.length === 0;
+      rawTextTruncated ||= parsed.rawTextTruncated;
     }
   }
 
@@ -221,6 +297,8 @@ export function parseResumeRoot(
     ...(unknownWorkStructure ? ['work-section-structure-unknown'] : []),
     ...(unknownEducationStructure ? ['education-section-structure-unknown'] : []),
     ...(unknownProjectStructure ? ['project-section-structure-unknown'] : []),
+    ...(unknownSectionKind ? ['resume-section-kind-unknown'] : []),
+    ...(rawTextTruncated ? ['resume-item-raw-text-truncated'] : []),
   ];
   const snapshot = buildProfileSnapshot(pageKind, profile, now);
 

@@ -129,7 +129,7 @@ describe('resume frame adapter', () => {
     expectNoPageOperations();
   });
 
-  it('warns when recognized sections have no known structured child fields', () => {
+  it('preserves raw text when recognized sections have no known structured child fields', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="resume-box">
         <h1 class="resume-name">候选人乙</h1>
@@ -149,15 +149,16 @@ describe('resume frame adapter', () => {
 
     const snapshot = parseResumeFrame(document, capturedAt);
 
-    expect(snapshot.profile?.work_experiences).toEqual([]);
-    expect(snapshot.profile?.education).toEqual([]);
-    expect(snapshot.profile?.project_experiences).toEqual([]);
-    expect(snapshot.warnings).toEqual([
-      'work-section-structure-unknown',
-      'education-section-structure-unknown',
-      'project-section-structure-unknown',
+    expect(snapshot.profile?.work_experiences).toEqual([
+      { raw_text: '只能看到一段未知工作结构' },
     ]);
-    expect(JSON.stringify(snapshot)).not.toContain('只能看到一段未知');
+    expect(snapshot.profile?.education).toEqual([
+      { raw_text: '只能看到一段未知教育结构' },
+    ]);
+    expect(snapshot.profile?.project_experiences).toEqual([
+      { raw_text: '只能看到一段未知项目结构' },
+    ]);
+    expect(snapshot.warnings).toEqual([]);
     expectNoPageOperations();
   });
 
@@ -188,9 +189,11 @@ describe('resume frame adapter', () => {
     expect(snapshot.profile?.work_experiences).toEqual([{
       company: '嵌套示例科技',
       title: '平台工程师',
+      raw_text: '嵌套示例科技 平台工程师',
     }]);
     expect(snapshot.profile?.education).toEqual([{
       school: '嵌套示例大学',
+      raw_text: '嵌套示例大学',
     }]);
     expect(snapshot.profile?.work_experiences).toHaveLength(1);
     expect(snapshot.profile?.education).toHaveLength(1);
