@@ -283,6 +283,55 @@ describe('recommend frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('focuses empty-profile diagnostics on resume summary and keeps repeated item classes', () => {
+    const noise = Array.from(
+      { length: 20 },
+      (_, index) => `<div class="resume-noise-${index}"></div>`,
+    ).join('');
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="lib-standard-resume wasm-resume-layout">
+        <div class="resume-layout-wrap">
+          <div class="resume-simple-box">
+            <div class="resume-item-detail">
+              <div class="resume-summary">
+                ${noise}
+                <section class="project">
+                  <article class="resume-label title content timeline-item">
+                    不得进入诊断的项目正文一
+                  </article>
+                  <article class="resume-label title content timeline-item">
+                    不得进入诊断的项目正文二
+                  </article>
+                </section>
+                <section class="education">
+                  <article class="resume-label title content timeline-item">
+                    不得进入诊断的教育正文
+                  </article>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>`);
+
+    const snapshot = parseRecommendFrame(document, capturedAt);
+    const serialized = JSON.stringify(snapshot);
+
+    expect(snapshot.status).toBe('unsupported');
+    expect(snapshot.warnings).toContain('structure:class-count=resume-summary:1');
+    expect(snapshot.warnings).toContain('structure:class-count=project:1');
+    expect(snapshot.warnings).toContain('structure:class-count=education:1');
+    expect(snapshot.warnings).toContain('structure:class-count=timeline-item:3');
+    expect(snapshot.warnings).toContain('structure:edge=resume-summary>project');
+    expect(snapshot.warnings).toContain('structure:edge=project>timeline-item');
+    expect(snapshot.warnings).toContain('structure:edge=resume-summary>education');
+    expect(snapshot.warnings).toContain('structure:edge=education>timeline-item');
+    expect(serialized).not.toContain('lib-standard-resume');
+    expect(serialized).not.toContain('resume-simple-box');
+    expect(serialized).not.toContain('不得进入诊断');
+    expectNoPageOperations();
+  });
+
   it('counts current BOSS semantic sections and preserves each visible item text', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <main class="lib-standard-resume wasm-resume-layout">
