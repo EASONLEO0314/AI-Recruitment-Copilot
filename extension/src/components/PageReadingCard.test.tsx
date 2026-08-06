@@ -159,6 +159,65 @@ describe('PageReadingCard', () => {
     expect(screen.queryByText('recommend-active-card-not-found')).not.toBeInTheDocument();
   });
 
+  it('shows every anonymous frame and the deterministic selection evidence', () => {
+    const snapshot = {
+      ...buildStatusSnapshot(
+        'recommend_frame',
+        'unsupported',
+        undefined,
+        capturedAt,
+      ),
+      warnings: ['probe:heading=work:1'],
+    };
+
+    render(
+      <PageReadingCard
+        snapshot={snapshot}
+        frameDiagnostics={[
+          {
+            frameId: 0,
+            pageKind: 'non_candidate',
+            status: 'ready',
+            warnings: [],
+          },
+          {
+            frameId: 2,
+            pageKind: 'recommend_frame',
+            status: 'unsupported',
+            warnings: [
+              'probe:visible-elements=88',
+              'probe:iframe-count=1',
+              'probe:canvas-count=0',
+              'probe:open-shadow-count=0',
+              'probe:wasm-class-count=1',
+              'probe:heading=work:1',
+              'probe:heading=education:1',
+              'probe:heading-path=work:main.resume-layout>section.work-experience>h2.title',
+              'probe:heading-path=education:private candidate text',
+            ],
+          },
+        ]}
+        selectedFrameId={2}
+        selectionReason="semantic_headings"
+        onRefresh={vi.fn()}
+        refreshing={false}
+      />,
+    );
+
+    expect(screen.getByText('已选择 frame 2 · 检测到固定简历栏目')).toBeInTheDocument();
+    expect(screen.getByText(/frame 0 · 页面外壳 · 已读取/)).toBeInTheDocument();
+    expect(screen.getByText(/frame 2 · 推荐候选 · 未匹配/)).toBeInTheDocument();
+    expect(screen.getByText(/元素 88/)).toBeInTheDocument();
+    expect(screen.getByText(/iframe 1/)).toBeInTheDocument();
+    expect(screen.getByText(/Canvas 0/)).toBeInTheDocument();
+    expect(screen.getByText(/WASM 1/)).toBeInTheDocument();
+    expect(screen.getByText('栏目：工作×1、教育×1')).toBeInTheDocument();
+    expect(screen.getByText(
+      '工作路径：main.resume-layout → section.work-experience → h2.title',
+    )).toBeInTheDocument();
+    expect(screen.queryByText(/private candidate text/)).not.toBeInTheDocument();
+  });
+
   it('never renders warning codes or arbitrary warning text verbatim', () => {
     const snapshot = {
       ...partialSnapshot,

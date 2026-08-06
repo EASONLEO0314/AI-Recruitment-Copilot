@@ -7,6 +7,19 @@ import { isParserSnapshot, isRecord } from '../validation';
 
 const REFRESH_REQUEST: ParserRefreshRequest = { type: 'ARC_PARSER_REFRESH' };
 const relayWatermarks = new WeakMap<ParserRelayMessage, number>();
+const MAX_TRACKED_FRAMES = 32;
+
+export type ParserSelectionReason =
+  | 'logged_out'
+  | 'profile_evidence'
+  | 'semantic_headings'
+  | 'candidate_structure'
+  | 'page_state';
+
+export interface ParserRelaySelection {
+  relay: ParserRelayMessage;
+  reason: ParserSelectionReason;
+}
 
 
 function capturedTime(relay: ParserRelayMessage): number {
@@ -21,6 +34,147 @@ function watermark(relay: ParserRelayMessage): number {
 
 function markWatermark(relay: ParserRelayMessage, value: number): void {
   relayWatermarks.set(relay, Math.max(capturedTime(relay), value));
+}
+
+
+function isCandidateRelay(relay: ParserRelayMessage): boolean {
+  return relay.snapshot.page_kind === 'recommend_frame'
+    || relay.snapshot.page_kind === 'resume_frame';
+}
+
+
+function warningNumber(relay: ParserRelayMessage, prefix: string, maximum: number): number {
+  const warning = relay.snapshot.warnings.find((value) => value.startsWith(prefix));
+  if (!warning) {
+    return 0;
+  }
+  const value = Number(warning.slice(prefix.length));
+  return Number.isInteger(value) && value >= 0 && value <= maximum ? value : 0;
+}
+
+
+function semanticHeadingCount(relay: ParserRelayMessage): number {
+  return relay.snapshot.warnings.reduce((total, warning) => {
+    const match = warning.match(/^probe:heading=(?:work|education|project):([1-9][0-9]?)$/);
+    return total + (match ? Number(match[1]) : 0);
+  }, 0);
+}
+
+
+function experienceItemCount(relay: ParserRelayMessage): number {
+  const profile = relay.snapshot.profile;
+  if (!profile) {
+    return 0;
+  }
+  return profile.work_experiences.length
+    + profile.education.length
+    + profile.project_experiences.length;
+}
+
+
+function relayQuality(relay: ParserRelayMessage): readonly number[] {
+  if (relay.snapshot.page_kind === 'logged_out') {
+    return [6, 0, 0, 0];
+  }
+  if (!isCandidateRelay(relay)) {
+    return relay.snapshot.page_kind === 'non_candidate'
+      ? [1, 0, 0, 0]
+      : [0, 0, 0, 0];
+  }
+
+  const presentFieldCount = relay.snapshot.present_fields.length;
+  const itemCount = experienceItemCount(relay);
+  if (relay.snapshot.profile && itemCount > 0) {
+    return [5, itemCount, presentFieldCount, 0];
+  }
+
+  const headingCount = semanticHeadingCount(relay);
+  const visibleElementCount = warningNumber(relay, 'probe:visible-elements=', 999);
+  if (headingCount > 0) {
+    return [4, headingCount, visibleElementCount, 0];
+  }
+
+  if (relay.snapshot.profile && presentFieldCount > 0) {
+    return [3, presentFieldCount, relay.snapshot.profile.skills.length, 0];
+  }
+
+  const structureElementCount = Math.max(
+    visibleElementCount,
+    warningNumber(relay, 'structure:element-count=', 999),
+  );
+  return [2, structureElementCount, relay.snapshot.status === 'error' ? 0 : 1, 0];
+}
+
+
+function compareQuality(left: ParserRelayMessage, right: ParserRelayMessage): number {
+  const leftQuality = relayQuality(left);
+  const rightQuality = relayQuality(right);
+  for (let index = 0; index < leftQuality.length; index += 1) {
+    const difference = leftQuality[index] - rightQuality[index];
+    if (difference !== 0) {
+      return difference;
+    }
+  }
+
+  const timeDifference = capturedTime(left) - capturedTime(right);
+  if (timeDifference !== 0) {
+    return timeDifference;
+  }
+  return right.source.frame_id - left.source.frame_id;
+}
+
+
+function selectionReason(relay: ParserRelayMessage): ParserSelectionReason {
+  if (relay.snapshot.page_kind === 'logged_out') {
+    return 'logged_out';
+  }
+  if (relay.snapshot.profile && experienceItemCount(relay) > 0) {
+    return 'profile_evidence';
+  }
+  if (semanticHeadingCount(relay) > 0) {
+    return 'semantic_headings';
+  }
+  if (relay.snapshot.profile && relay.snapshot.present_fields.length > 0) {
+    return 'profile_evidence';
+  }
+  return isCandidateRelay(relay) ? 'candidate_structure' : 'page_state';
+}
+
+
+export function upsertParserRelay(
+  current: readonly ParserRelayMessage[],
+  incoming: ParserRelayMessage,
+): ParserRelayMessage[] {
+  const currentTop = current.find((relay) => relay.source.frame_id === 0);
+  const base = incoming.source.frame_id === 0
+    && currentTop
+    && currentTop.source.document_id !== incoming.source.document_id
+    ? []
+    : current;
+  const existing = base.find((relay) =>
+    relay.source.frame_id === incoming.source.frame_id);
+  if (existing && capturedTime(incoming) < capturedTime(existing)) {
+    return [...base];
+  }
+
+  const next = base
+    .filter((relay) => relay.source.frame_id !== incoming.source.frame_id)
+    .concat(incoming);
+  const bounded = next.length <= MAX_TRACKED_FRAMES
+    ? next
+    : [...next]
+      .sort((left, right) => capturedTime(right) - capturedTime(left))
+      .slice(0, MAX_TRACKED_FRAMES);
+  return bounded.sort((left, right) => left.source.frame_id - right.source.frame_id);
+}
+
+
+export function selectBestParserRelay(
+  relays: readonly ParserRelayMessage[],
+): ParserRelaySelection | null {
+  const relay = relays.reduce<ParserRelayMessage | null>((best, candidate) =>
+    !best || compareQuality(candidate, best) > 0 ? candidate : best, null);
+  return relay ? { relay, reason: selectionReason(relay) } : null;
 }
 
 

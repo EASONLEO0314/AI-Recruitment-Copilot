@@ -40,11 +40,14 @@ vi.mock('../api', () => ({
   getDemoAssessment: vi.fn(),
 }));
 
-vi.mock('../parser/client', () => ({
-  acceptParserRelay: (_current: ParserRelayMessage | null, incoming: ParserRelayMessage) => incoming,
-  requestParserRefresh: parserClient.requestRefresh,
-  subscribeToParserRelays: parserClient.subscribe,
-}));
+vi.mock('../parser/client', async () => {
+  const actual = await vi.importActual<typeof import('../parser/client')>('../parser/client');
+  return {
+    ...actual,
+    requestParserRefresh: parserClient.requestRefresh,
+    subscribeToParserRelays: parserClient.subscribe,
+  };
+});
 
 const assessment: AssessmentResponse = {
   request_id: 'assessment-1',
@@ -155,6 +158,48 @@ describe('CopilotPanel', () => {
     expect(screen.getByText('演示数据')).toBeInTheDocument();
     expect(screen.getByText('92%')).toBeInTheDocument();
     expect(screen.queryByText('真实评估')).not.toBeInTheDocument();
+  });
+
+  it('keeps a richer semantic frame selected when a sparse frame arrives later', async () => {
+    const richFrame: ParserRelayMessage = {
+      type: 'ARC_PARSER_RELAY',
+      snapshot: {
+        ...buildStatusSnapshot(
+          'recommend_frame',
+          'unsupported',
+          undefined,
+          new Date('2026-07-29T02:00:02.000Z'),
+        ),
+        warnings: [
+          'probe:visible-elements=88',
+          'probe:heading=work:1',
+          'probe:heading=education:1',
+        ],
+      },
+      source: { frame_id: 2, document_id: 'anonymous-document-2' },
+    };
+    const sparseFrame: ParserRelayMessage = {
+      type: 'ARC_PARSER_RELAY',
+      snapshot: {
+        ...buildStatusSnapshot(
+          'resume_frame',
+          'unsupported',
+          undefined,
+          new Date('2026-07-29T02:00:03.000Z'),
+        ),
+        warnings: ['probe:visible-elements=10'],
+      },
+      source: { frame_id: 7, document_id: 'anonymous-document-7' },
+    };
+
+    render(<CopilotPanel />);
+    await screen.findByText('92%');
+    act(() => parserClient.emit(richFrame));
+    act(() => parserClient.emit(sparseFrame));
+
+    expect(screen.getByText('已选择 frame 2 · 检测到固定简历栏目')).toBeInTheDocument();
+    expect(screen.getByText(/frame 2 · 推荐候选 · 未匹配/)).toBeInTheDocument();
+    expect(screen.getByText(/frame 7 · 候选简历 · 未匹配/)).toBeInTheDocument();
   });
 
   it('refreshes page reading once without clipboard or scrolling side effects', async () => {

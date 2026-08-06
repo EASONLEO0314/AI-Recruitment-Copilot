@@ -157,6 +157,66 @@ describe('parser coordinator', () => {
     expect(FakeObserver.instances[0].disconnect).toHaveBeenCalledTimes(1);
   });
 
+  it('adds bounded semantic and rendering probes to an unsupported candidate frame', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div id="private-candidate-id" data-private="candidate-record">
+        <h2 class="section-title">工作经历</h2>
+        <p>不得进入 frame 诊断的候选人正文</p>
+        <canvas></canvas>
+        <iframe></iframe>
+      </div>`);
+    const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/web/frame/recommend',
+      isTopFrame: false,
+      sendMessage,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+    });
+
+    const snapshot = sendMessage.mock.calls[0][0].snapshot;
+    const serialized = JSON.stringify(snapshot);
+    expect(snapshot.status).toBe('unsupported');
+    expect(snapshot.warnings).toContain('probe:heading=work:1');
+    expect(snapshot.warnings).toContain('probe:canvas-count=1');
+    expect(snapshot.warnings).toContain('probe:iframe-count=1');
+    expect(snapshot.warnings.length).toBeLessThanOrEqual(40);
+    expect(snapshot.warnings.every((warning) => warning.length <= 160)).toBe(true);
+    expect(serialized).not.toContain('不得进入 frame 诊断');
+    expect(serialized).not.toContain('private-candidate-id');
+    expect(serialized).not.toContain('candidate-record');
+  });
+
+  it('keeps a parsed profile when the optional capability probe throws', () => {
+    setRecommendFixture();
+    const originalQuerySelectorAll = document.querySelectorAll.bind(document);
+    vi.spyOn(document, 'querySelectorAll').mockImplementation((selector) => {
+      if (selector === '*') {
+        throw new Error('private probe failure detail');
+      }
+      return originalQuerySelectorAll(selector);
+    });
+    const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/web/frame/recommend',
+      isTopFrame: false,
+      sendMessage,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+    });
+
+    expect(sendMessage.mock.calls[0][0].snapshot).toMatchObject({
+      page_kind: 'recommend_frame',
+      profile: { display_name: '匿名候选人' },
+    });
+    expect(JSON.stringify(sendMessage.mock.calls[0][0]))
+      .not.toContain('private probe failure detail');
+  });
+
   it('reparses when active-card markers switch without structural or text changes', () => {
     document.body.innerHTML = `
       <section class="card-list">

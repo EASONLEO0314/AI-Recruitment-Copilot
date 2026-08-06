@@ -1,8 +1,20 @@
-import type { ParserSnapshot } from '../contracts';
+import type { PageKind, ParserSnapshot, ParserStatus } from '../contracts';
+import type { ParserSelectionReason } from '../parser/client';
+
+
+export interface FrameReadingDiagnostic {
+  frameId: number;
+  pageKind: PageKind;
+  status: ParserStatus;
+  warnings: string[];
+}
 
 
 interface PageReadingCardProps {
   snapshot: ParserSnapshot | null;
+  frameDiagnostics?: FrameReadingDiagnostic[];
+  selectedFrameId?: number;
+  selectionReason?: ParserSelectionReason;
   onRefresh: () => void;
   refreshing: boolean;
 }
@@ -27,6 +39,37 @@ const CORE_PROFILE_FIELDS = new Set([
 const STRUCTURE_CLASS_FORMAT = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
 const STRUCTURE_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline)/i;
 const STRUCTURE_TOPOLOGY_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline|title|item|content|section|box|header|body|summary|greet)/i;
+const PROBE_PATH_TAG_FORMAT = /^[a-z][a-z0-9-]{0,15}$/;
+
+const PAGE_KIND_LABELS: Readonly<Record<PageKind, string>> = {
+  logged_out: '未登录',
+  non_candidate: '页面外壳',
+  recommend_frame: '推荐候选',
+  resume_frame: '候选简历',
+  unsupported: '未知页面',
+};
+
+const STATUS_LABELS: Readonly<Record<ParserStatus, string>> = {
+  waiting: '等待',
+  ready: '已读取',
+  partial: '部分读取',
+  unsupported: '未匹配',
+  error: '错误',
+};
+
+const SELECTION_REASON_LABELS: Readonly<Record<ParserSelectionReason, string>> = {
+  logged_out: '检测到未登录状态',
+  profile_evidence: '已解析到候选人资料字段',
+  semantic_headings: '检测到固定简历栏目',
+  candidate_structure: '候选页面结构证据最多',
+  page_state: '当前页面状态',
+};
+
+const HEADING_LABELS = {
+  work: '工作',
+  education: '教育',
+  project: '项目',
+} as const;
 
 
 function structureNodeLabel(value: string): string | undefined {
@@ -38,6 +81,108 @@ function structureNodeLabel(value: string): string | undefined {
     return undefined;
   }
   return tokens.join(' + ');
+}
+
+
+function probeNumber(
+  warnings: readonly string[],
+  prefix: string,
+  maximum: number,
+): number | undefined {
+  const warning = warnings.find((value) => value.startsWith(prefix));
+  if (!warning) {
+    return undefined;
+  }
+  const value = Number(warning.slice(prefix.length));
+  return Number.isInteger(value) && value >= 0 && value <= maximum ? value : undefined;
+}
+
+
+function safeProbePath(value: string): string | undefined {
+  const nodes = value.split('>');
+  if (nodes.length === 0 || nodes.length > 5) {
+    return undefined;
+  }
+  for (const node of nodes) {
+    const [tag, ...classes] = node.split('.');
+    if (!PROBE_PATH_TAG_FORMAT.test(tag)
+      || classes.length > 2
+      || classes.some((token) => !STRUCTURE_CLASS_FORMAT.test(token)
+        || !STRUCTURE_TOPOLOGY_CLASS_KEYWORD.test(token))) {
+      return undefined;
+    }
+  }
+  return nodes.join(' → ');
+}
+
+
+function FrameDiagnostics({
+  frames,
+  selectedFrameId,
+  selectionReason,
+}: {
+  frames: FrameReadingDiagnostic[];
+  selectedFrameId?: number;
+  selectionReason?: ParserSelectionReason;
+}) {
+  if (frames.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="arc-reading__frames" aria-label="匿名 frame 诊断">
+      {selectedFrameId !== undefined && selectionReason && (
+        <strong>
+          已选择 frame {selectedFrameId} · {SELECTION_REASON_LABELS[selectionReason]}
+        </strong>
+      )}
+      {frames.map((frame) => {
+        const visibleElements = probeNumber(
+          frame.warnings,
+          'probe:visible-elements=',
+          999,
+        );
+        const iframeCount = probeNumber(frame.warnings, 'probe:iframe-count=', 50);
+        const canvasCount = probeNumber(frame.warnings, 'probe:canvas-count=', 50);
+        const shadowCount = probeNumber(frame.warnings, 'probe:open-shadow-count=', 50);
+        const wasmCount = probeNumber(frame.warnings, 'probe:wasm-class-count=', 50);
+        const headings = (Object.keys(HEADING_LABELS) as Array<keyof typeof HEADING_LABELS>)
+          .flatMap((kind) => {
+            const count = probeNumber(frame.warnings, `probe:heading=${kind}:`, 9);
+            return count === undefined ? [] : [`${HEADING_LABELS[kind]}×${count}`];
+          });
+        const paths = (Object.keys(HEADING_LABELS) as Array<keyof typeof HEADING_LABELS>)
+          .flatMap((kind) => {
+            const prefix = `probe:heading-path=${kind}:`;
+            const warning = frame.warnings.find((value) => value.startsWith(prefix));
+            const path = warning ? safeProbePath(warning.slice(prefix.length)) : undefined;
+            return path ? [{ kind, path }] : [];
+          });
+        const facts = [
+          visibleElements !== undefined ? `元素 ${visibleElements}` : undefined,
+          iframeCount !== undefined ? `iframe ${iframeCount}` : undefined,
+          canvasCount !== undefined ? `Canvas ${canvasCount}` : undefined,
+          shadowCount !== undefined ? `Shadow ${shadowCount}` : undefined,
+          wasmCount !== undefined ? `WASM ${wasmCount}` : undefined,
+        ].filter((value): value is string => value !== undefined);
+
+        return (
+          <div className="arc-reading__frame" key={frame.frameId}>
+            <b>
+              frame {frame.frameId} · {PAGE_KIND_LABELS[frame.pageKind]} ·{' '}
+              {STATUS_LABELS[frame.status]}
+              {frame.frameId === selectedFrameId ? '（已选）' : ''}
+            </b>
+            {facts.length > 0 && <span>{facts.join(' · ')}</span>}
+            {headings.length > 0 && <span>栏目：{headings.join('、')}</span>}
+            {paths.map(({ kind, path }) => (
+              <small key={kind}>{HEADING_LABELS[kind]}路径：{path}</small>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 
@@ -209,6 +354,9 @@ function ReadingStatus({ snapshot }: { snapshot: ParserSnapshot | null }) {
 
 export function PageReadingCard({
   snapshot,
+  frameDiagnostics = [],
+  selectedFrameId,
+  selectionReason,
   onRefresh,
   refreshing,
 }: PageReadingCardProps) {
@@ -223,6 +371,11 @@ export function PageReadingCard({
       <div className="arc-reading__status" role="status">
         <ReadingStatus snapshot={snapshot} />
       </div>
+      <FrameDiagnostics
+        frames={frameDiagnostics}
+        selectedFrameId={selectedFrameId}
+        selectionReason={selectionReason}
+      />
     </section>
   );
 }

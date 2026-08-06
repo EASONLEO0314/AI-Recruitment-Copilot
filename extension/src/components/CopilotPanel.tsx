@@ -8,9 +8,10 @@ import type {
   ParserRelayMessage,
 } from '../contracts';
 import {
-  acceptParserRelay,
   requestParserRefresh,
+  selectBestParserRelay,
   subscribeToParserRelays,
+  upsertParserRelay,
 } from '../parser/client';
 import { PageReadingCard } from './PageReadingCard';
 
@@ -69,7 +70,7 @@ export function CopilotPanel() {
   const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
   const [activeMessageType, setActiveMessageType] = useState<MessageType>('greeting');
   const [copyFeedback, setCopyFeedback] = useState('');
-  const [parserRelay, setParserRelay] = useState<ParserRelayMessage | null>(null);
+  const [parserRelays, setParserRelays] = useState<ParserRelayMessage[]>([]);
   const [parserRefreshing, setParserRefreshing] = useState(false);
   const copyFeedbackTimer = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
 
@@ -97,7 +98,7 @@ export function CopilotPanel() {
   }, [connect]);
 
   useEffect(() => subscribeToParserRelays((incoming) => {
-    setParserRelay((current) => acceptParserRelay(current, incoming));
+    setParserRelays((current) => upsertParserRelay(current, incoming));
     setParserRefreshing(false);
   }), []);
 
@@ -112,8 +113,23 @@ export function CopilotPanel() {
     [activeMessageType, assessment],
   );
 
+  const parserSelection = useMemo(
+    () => selectBestParserRelay(parserRelays),
+    [parserRelays],
+  );
+  const frameDiagnostics = useMemo(
+    () => parserRelays.map((relay) => ({
+      frameId: relay.source.frame_id,
+      pageKind: relay.snapshot.page_kind,
+      status: relay.snapshot.status,
+      warnings: relay.snapshot.warnings,
+    })),
+    [parserRelays],
+  );
+
   const refreshPageReading = async () => {
     setParserRefreshing(true);
+    setParserRelays([]);
     try {
       await requestParserRefresh();
     } catch {
@@ -194,7 +210,10 @@ export function CopilotPanel() {
 
       <main className="arc-content">
         <PageReadingCard
-          snapshot={parserRelay?.snapshot ?? null}
+          snapshot={parserSelection?.relay.snapshot ?? null}
+          frameDiagnostics={frameDiagnostics}
+          selectedFrameId={parserSelection?.relay.source.frame_id}
+          selectionReason={parserSelection?.reason}
           onRefresh={() => void refreshPageReading()}
           refreshing={parserRefreshing}
         />

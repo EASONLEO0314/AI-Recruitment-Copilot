@@ -6,6 +6,7 @@ import type {
 import { isHidden } from './dom';
 import { findRecommendObservationRoot, parseRecommendFrame } from './adapters/recommend';
 import { parseResumeFrame } from './adapters/resume';
+import { buildCapabilityWarnings } from './capabilityProbe';
 import { classifyPage } from './pageClassifier';
 import { buildStatusSnapshot } from './snapshot';
 
@@ -64,6 +65,7 @@ function buildSnapshot(
   targetDocument: Document,
   now: Date,
 ): ParserSnapshot {
+  let snapshot: ParserSnapshot;
   switch (pageKind) {
     case 'logged_out':
     case 'non_candidate':
@@ -71,10 +73,27 @@ function buildSnapshot(
     case 'unsupported':
       return buildStatusSnapshot(pageKind, 'unsupported', undefined, now);
     case 'recommend_frame':
-      return parseRecommendFrame(targetDocument, now);
+      snapshot = parseRecommendFrame(targetDocument, now);
+      break;
     case 'resume_frame':
-      return parseResumeFrame(targetDocument, now);
+      snapshot = parseResumeFrame(targetDocument, now);
+      break;
   }
+
+  let capabilityWarnings: string[] = [];
+  try {
+    capabilityWarnings = buildCapabilityWarnings(targetDocument);
+  } catch {
+    // Optional diagnostics must never replace a successful parser result.
+  }
+
+  return {
+    ...snapshot,
+    warnings: [
+      ...capabilityWarnings,
+      ...snapshot.warnings,
+    ].slice(0, 40),
+  };
 }
 
 

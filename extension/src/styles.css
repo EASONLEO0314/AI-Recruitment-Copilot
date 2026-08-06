@@ -326,6 +326,41 @@ button {
   overflow-wrap: anywhere;
 }
 
+.arc-reading__frames {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #d7e1e5;
+  color: #53616d;
+  font-size: 9px;
+}
+
+.arc-reading__frames > strong {
+  color: #087f79;
+  font-size: 10px;
+}
+
+.arc-reading__frame {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 7px;
+  border-radius: 7px;
+  background: #f4f7f8;
+  overflow-wrap: anywhere;
+}
+
+.arc-reading__frame > b {
+  color: #2f3d47;
+}
+
+.arc-reading__frame > small {
+  font-family: Consolas, monospace;
+  font-size: 8px;
+}
+
 .arc-reading__missing {
   color: #9a6415;
   font-size: 10px;
