@@ -1,8 +1,47 @@
 import { normalizeText } from './snapshot';
 
 
+const NON_RENDERED_TEXT_CONTAINERS = new Set([
+  'SCRIPT',
+  'STYLE',
+  'NOSCRIPT',
+  'TEMPLATE',
+]);
+
+
 export function isHidden(element: Element): boolean {
   return element.closest('[hidden], [aria-hidden="true"]') !== null;
+}
+
+
+export function visibleText(root: Element, maxLength = 500): string {
+  const parts: string[] = [];
+
+  function visit(node: Node): void {
+    if (node.nodeType === 3) {
+      const parent = node.parentElement;
+      if (parent && !isHidden(parent)) {
+        const value = normalizeText(node.textContent, maxLength + 1);
+        if (value) {
+          parts.push(value);
+        }
+      }
+      return;
+    }
+
+    if (!(node instanceof Element)
+      || isHidden(node)
+      || NON_RENDERED_TEXT_CONTAINERS.has(node.tagName)) {
+      return;
+    }
+
+    for (const child of node.childNodes) {
+      visit(child);
+    }
+  }
+
+  visit(root);
+  return normalizeText(parts.join(' '), maxLength);
 }
 
 
