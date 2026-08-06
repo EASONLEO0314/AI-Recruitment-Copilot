@@ -49,4 +49,20 @@ describe('visibleText', () => {
 
     expect(visibleText(item, 2_000)).toBe('可见内容');
   });
+
+  it('keeps a visible child when a hidden overlay ancestor is overridden', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <div style="visibility: hidden">
+        <article class="resume-item-detail" style="visibility: visible">
+          弹层内可见简历
+        </article>
+      </div>`);
+
+    const item = document.querySelector('.resume-item-detail');
+    if (!(item instanceof Element)) {
+      throw new Error('fixture missing');
+    }
+
+    expect(visibleText(item, 2_000)).toBe('弹层内可见简历');
+  });
 });

@@ -19,12 +19,16 @@ export function isHidden(element: Element): boolean {
     return false;
   }
 
+  const elementStyle = view.getComputedStyle(element);
+  if (elementStyle.visibility === 'hidden'
+    || elementStyle.visibility === 'collapse') {
+    return true;
+  }
+
   let current: Element | null = element;
   while (current) {
     const style = view.getComputedStyle(current);
-    if (style.display === 'none'
-      || style.visibility === 'hidden'
-      || style.visibility === 'collapse') {
+    if (style.display === 'none') {
       return true;
     }
     current = current.parentElement;
