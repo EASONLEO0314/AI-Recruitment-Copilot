@@ -7,6 +7,7 @@ import type {
   ProjectExperience,
   WorkExperience,
 } from '../contracts';
+import { RESUME_ITEM_RAW_TEXT_MAX_LENGTH } from '../contracts';
 
 
 const CORE_FIELDS = [
@@ -25,9 +26,6 @@ const NON_CORE_FIELDS = [
   'expected_city',
   'summary',
 ] as const;
-
-export const RESUME_ITEM_RAW_TEXT_MAX_LENGTH = 2_000;
-
 
 export function normalizeText(value: string | null | undefined, maxLength = 500): string {
   return (value ?? '').replace(/\s+/g, ' ').trim().slice(0, maxLength);

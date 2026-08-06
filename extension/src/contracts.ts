@@ -82,6 +82,8 @@ export type PageKind =
 
 export type ParserStatus = 'waiting' | 'ready' | 'partial' | 'unsupported' | 'error';
 
+export const RESUME_ITEM_RAW_TEXT_MAX_LENGTH = 2_000;
+
 export interface EducationExperience {
   school?: string;
   degree?: string;

@@ -5,12 +5,12 @@ import type {
   ProjectExperience,
   WorkExperience,
 } from '../../contracts';
+import { RESUME_ITEM_RAW_TEXT_MAX_LENGTH } from '../../contracts';
 import { allTexts, firstText, isHidden, visibleText } from '../dom';
 import {
   buildProfileSnapshot,
   buildStatusSnapshot,
   normalizeText,
-  RESUME_ITEM_RAW_TEXT_MAX_LENGTH,
 } from '../snapshot';
 
 

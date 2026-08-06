@@ -29,4 +29,24 @@ describe('visibleText', () => {
       '示例公司 平台工程师 负责 数据平台',
     );
   });
+
+  it('ignores text hidden by CSS on the element or an ancestor', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <style>
+        .css-hidden { display: none; }
+        .css-invisible { visibility: hidden; }
+      </style>
+      <article class="resume-item-detail">
+        可见内容
+        <span class="css-hidden">CSS 隐藏内容</span>
+        <span class="css-invisible"><b>CSS 隐藏后代</b></span>
+      </article>`);
+
+    const item = document.querySelector('.resume-item-detail');
+    if (!(item instanceof Element)) {
+      throw new Error('fixture missing');
+    }
+
+    expect(visibleText(item, 2_000)).toBe('可见内容');
+  });
 });

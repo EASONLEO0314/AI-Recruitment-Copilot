@@ -6,6 +6,7 @@ import type {
   MessageSuggestion,
   ParserSnapshot,
 } from './contracts';
+import { RESUME_ITEM_RAW_TEXT_MAX_LENGTH } from './contracts';
 
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -145,7 +146,7 @@ function isEducationExperience(value: unknown): boolean {
     && hasOnlyKeys(value, EDUCATION_KEYS)
     && ['school', 'degree', 'major', 'period']
       .every((key) => isOptionalSafeString(value, key))
-    && isOptionalSafeString(value, 'raw_text', 2_000);
+    && isOptionalSafeString(value, 'raw_text', RESUME_ITEM_RAW_TEXT_MAX_LENGTH);
 }
 
 
@@ -156,7 +157,7 @@ function isWorkExperience(value: unknown): boolean {
     && isOptionalSafeString(value, 'title')
     && isOptionalSafeString(value, 'period')
     && isOptionalSafeString(value, 'description', 500)
-    && isOptionalSafeString(value, 'raw_text', 2_000);
+    && isOptionalSafeString(value, 'raw_text', RESUME_ITEM_RAW_TEXT_MAX_LENGTH);
 }
 
 
@@ -167,7 +168,7 @@ function isProjectExperience(value: unknown): boolean {
     && isOptionalSafeString(value, 'role')
     && isOptionalSafeString(value, 'period')
     && isOptionalSafeString(value, 'description', 500)
-    && isOptionalSafeString(value, 'raw_text', 2_000);
+    && isOptionalSafeString(value, 'raw_text', RESUME_ITEM_RAW_TEXT_MAX_LENGTH);
 }
 
 

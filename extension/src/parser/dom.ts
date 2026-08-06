@@ -10,7 +10,26 @@ const NON_RENDERED_TEXT_CONTAINERS = new Set([
 
 
 export function isHidden(element: Element): boolean {
-  return element.closest('[hidden], [aria-hidden="true"]') !== null;
+  if (element.closest('[hidden], [aria-hidden="true"]') !== null) {
+    return true;
+  }
+
+  const view = element.ownerDocument.defaultView;
+  if (!view) {
+    return false;
+  }
+
+  let current: Element | null = element;
+  while (current) {
+    const style = view.getComputedStyle(current);
+    if (style.display === 'none'
+      || style.visibility === 'hidden'
+      || style.visibility === 'collapse') {
+      return true;
+    }
+    current = current.parentElement;
+  }
+  return false;
 }
 
 
