@@ -238,6 +238,46 @@ describe('parser coordinator', () => {
     expect(sendMessage).toHaveBeenCalledTimes(2);
   });
 
+  it('reclassifies an unknown BOSS child frame when candidate DOM appears before refresh', () => {
+    const runtime = createRuntimeOnMessage();
+    const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/web/frame/unknown',
+      isTopFrame: false,
+      sendMessage,
+      runtimeOnMessage: runtime.event,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+    });
+
+    expect(sendMessage.mock.calls[0][0].snapshot).toMatchObject({
+      page_kind: 'unsupported',
+      status: 'unsupported',
+    });
+
+    document.body.innerHTML = `
+      <div class="dialog-lib-resume">
+        <div class="lib-standard-resume">
+          <div class="resume-right-side">
+            <div class="geek-name"><span class="name">候选人戊</span></div>
+          </div>
+        </div>
+      </div>`;
+    runtime.getListener()?.(
+      { type: 'ARC_PARSER_REFRESH_COMMAND' },
+      {} as chrome.runtime.MessageSender,
+      vi.fn(),
+    );
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls[1][0].snapshot).toMatchObject({
+      page_kind: 'recommend_frame',
+      profile: { display_name: '候选人戊' },
+    });
+  });
+
   it('sends only a safe logged-out snapshot and never constructs an observer', () => {
     document.body.innerHTML = '<a>登录/注册</a>';
     const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);

@@ -116,17 +116,13 @@ function findObservationRoot(pageKind: PageKind, targetDocument: Document): Elem
 
 
 export function startParserCoordinator(options: CoordinatorOptions): CoordinatorHandle {
-  const pageKind = classifyPage(
-    options.targetDocument,
-    options.currentUrl,
-    options.isTopFrame,
-  );
   const sendMessage = options.sendMessage ?? defaultSendMessage;
   const runtimeOnMessage = options.runtimeOnMessage ?? defaultRuntimeOnMessage();
   const Observer = options.Observer ?? defaultObserver();
   const now = options.now ?? (() => new Date());
 
   let stopped = false;
+  let pageKind: PageKind = 'unsupported';
   let timer: ReturnType<typeof setTimeout> | undefined;
   let observer: MutationObserver | undefined;
   let lastSuccessfulKey: string | undefined;
@@ -192,6 +188,11 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
 
     let snapshot: ParserSnapshot;
     try {
+      pageKind = classifyPage(
+        options.targetDocument,
+        options.currentUrl,
+        options.isTopFrame,
+      );
       snapshot = buildSnapshot(pageKind, options.targetDocument, now());
     } catch {
       snapshot = buildStatusSnapshot(pageKind, 'error', 'parser-exception', now());
