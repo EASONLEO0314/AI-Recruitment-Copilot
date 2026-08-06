@@ -8,6 +8,10 @@ const LOGIN_LABELS = new Set(['登录', '立即登录', '登录/注册', '扫码
 const RECOMMEND_FRAME_SIGNATURES = [
   '.dialog-lib-resume .lib-standard-resume',
   '.dialog-lib-resume .resume-layout-wrap',
+  '.resume-detail-wrap',
+  '.lib-standard-resume',
+  '.wasm-resume-layout',
+  '.lib-resume-recommend',
   '.candidate-recommend',
   '.recommend-wrap',
 ] as const;

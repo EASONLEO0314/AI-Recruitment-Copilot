@@ -24,6 +24,10 @@ const MODERN_RESUME_ROOT_SELECTORS = [
   '.dialog-lib-resume .lib-standard-resume',
   '.dialog-lib-resume .resume-layout-wrap',
   '.dialog-lib-resume',
+  '.resume-detail-wrap',
+  '.lib-standard-resume',
+  '.wasm-resume-layout',
+  '.lib-resume-recommend',
 ];
 
 const LOCATION_EXCLUSIONS = /年|学历|本科|硕士|博士|大专/;

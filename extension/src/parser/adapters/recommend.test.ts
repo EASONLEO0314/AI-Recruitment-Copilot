@@ -235,6 +235,23 @@ describe('recommend frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('uses a standalone modern resume root for safe diagnostics', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="resume-detail-wrap wasm-resume-layout">
+        <iframe class="resume-content-frame"></iframe>
+      </main>`);
+
+    const snapshot = parseRecommendFrame(document, capturedAt);
+
+    expect(snapshot.page_kind).toBe('recommend_frame');
+    expect(snapshot.status).toBe('unsupported');
+    expect(snapshot.warnings).toContain('recommend-resume-profile-empty');
+    expect(snapshot.warnings).toContain('structure:iframe-count=1');
+    expect(snapshot.warnings).toContain('structure:class=resume-detail-wrap');
+    expect(snapshot.warnings).toContain('structure:class=wasm-resume-layout');
+    expectNoPageOperations();
+  });
+
   it('reports ambiguity when several cards exist and none is selected', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="card-list">

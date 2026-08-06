@@ -67,6 +67,21 @@ describe('classifyPage', () => {
     ).toBe('recommend_frame');
   });
 
+  it.each([
+    ['standalone standard resume', '<main class="lib-standard-resume"></main>'],
+    ['standalone resume detail', '<main class="resume-detail-wrap"></main>'],
+    ['standalone WASM resume', '<main class="wasm-resume-layout"></main>'],
+    ['standalone recommended resume', '<main class="lib-resume-recommend"></main>'],
+  ])('classifies an unknown BOSS child frame from a visible %s signature', (_description, markup) => {
+    expect(
+      classifyPage(
+        createAnonymousDocument(markup),
+        'https://www.zhipin.com/web/frame/unknown',
+        false,
+      ),
+    ).toBe('recommend_frame');
+  });
+
   it('ignores a hidden candidate structure on an unknown child frame', () => {
     expect(
       classifyPage(
