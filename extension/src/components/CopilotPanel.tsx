@@ -6,13 +6,14 @@ import type {
   ConnectionState,
   MessageType,
   ParserRelayMessage,
-  ParserSnapshot,
   ResumeReadErrorCode,
 } from '../contracts';
 import {
+  composeCandidateReading,
   requestParserRefresh,
   requestResumeRead,
   selectBestParserRelay,
+  type SessionParserSnapshot,
   subscribeToParserRelays,
   upsertParserRelay,
 } from '../parser/client';
@@ -76,10 +77,14 @@ export function CopilotPanel() {
   const [parserRelays, setParserRelays] = useState<ParserRelayMessage[]>([]);
   const [parserRefreshing, setParserRefreshing] = useState(false);
   const [resumeReading, setResumeReading] = useState(false);
-  const [resumeSnapshot, setResumeSnapshot] = useState<ParserSnapshot | null>(null);
+  const [resumeResult, setResumeResult] = useState<SessionParserSnapshot | null>(null);
+  const [resumeDomRelays, setResumeDomRelays] = useState<ParserRelayMessage[]>([]);
+  const [resumeSessionId, setResumeSessionId] = useState('read-0');
   const [resumeReadError, setResumeReadError] = useState<ResumeReadErrorCode | null>(null);
   const copyFeedbackTimer = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
   const resumeReadInFlight = useRef(false);
+  const resumeSessionCounter = useRef(0);
+  const activeResumeSession = useRef('read-0');
 
   const connect = useCallback(async () => {
     if (copyFeedbackTimer.current !== null) {
@@ -124,6 +129,14 @@ export function CopilotPanel() {
     () => selectBestParserRelay(parserRelays),
     [parserRelays],
   );
+  const candidateReading = useMemo(
+    () => composeCandidateReading(
+      resumeResult ? resumeDomRelays : parserRelays,
+      resumeResult,
+      resumeSessionId,
+    ),
+    [parserRelays, resumeDomRelays, resumeResult, resumeSessionId],
+  );
   const frameDiagnostics = useMemo(
     () => parserRelays.map((relay) => ({
       frameId: relay.source.frame_id,
@@ -135,9 +148,16 @@ export function CopilotPanel() {
   );
 
   const refreshPageReading = async () => {
+    const invalidatedSession = `read-${resumeSessionCounter.current + 1}`;
+    resumeSessionCounter.current += 1;
+    activeResumeSession.current = invalidatedSession;
+    setResumeSessionId(invalidatedSession);
     setParserRefreshing(true);
     setParserRelays([]);
-    setResumeSnapshot(null);
+    setResumeResult(null);
+    setResumeDomRelays([]);
+    resumeReadInFlight.current = false;
+    setResumeReading(false);
     setResumeReadError(null);
     try {
       await requestParserRefresh();
@@ -150,22 +170,33 @@ export function CopilotPanel() {
     if (resumeReadInFlight.current) {
       return;
     }
+    const sessionId = `read-${resumeSessionCounter.current + 1}`;
+    resumeSessionCounter.current += 1;
+    activeResumeSession.current = sessionId;
     resumeReadInFlight.current = true;
+    setResumeSessionId(sessionId);
+    setResumeDomRelays(parserRelays);
     setResumeReading(true);
-    setResumeSnapshot(null);
+    setResumeResult(null);
     setResumeReadError(null);
     try {
       const response = await requestResumeRead();
-      if (response.ok) {
-        setResumeSnapshot(response.snapshot);
-      } else {
-        setResumeReadError(response.error);
+      if (activeResumeSession.current === sessionId) {
+        if (response.ok) {
+          setResumeResult({ session_id: sessionId, snapshot: response.snapshot });
+        } else {
+          setResumeReadError(response.error);
+        }
       }
     } catch {
-      setResumeReadError('vue-read-failed');
+      if (activeResumeSession.current === sessionId) {
+        setResumeReadError('vue-read-failed');
+      }
     } finally {
-      resumeReadInFlight.current = false;
-      setResumeReading(false);
+      if (activeResumeSession.current === sessionId) {
+        resumeReadInFlight.current = false;
+        setResumeReading(false);
+      }
     }
   };
 
@@ -242,7 +273,7 @@ export function CopilotPanel() {
 
       <main className="arc-content">
         <PageReadingCard
-          snapshot={parserSelection?.relay.snapshot ?? null}
+          snapshot={candidateReading?.snapshot ?? null}
           frameDiagnostics={frameDiagnostics}
           selectedFrameId={parserSelection?.relay.source.frame_id}
           selectionReason={parserSelection?.reason}
@@ -250,7 +281,9 @@ export function CopilotPanel() {
           refreshing={parserRefreshing}
           onReadResume={() => void readCurrentResume()}
           resumeReading={resumeReading}
-          resumeSnapshot={resumeSnapshot}
+          resumeSnapshot={resumeResult?.session_id === resumeSessionId
+            ? resumeResult.snapshot
+            : null}
           resumeReadError={resumeReadError}
         />
         {connection === 'connecting' && <LoadingState />}

@@ -418,19 +418,21 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 - 修改：`extension/src/components/PageReadingCard.tsx`
 - 修改：`extension/src/components/PageReadingCard.test.tsx`
 
-- [ ] **Step 1：写失败的来源合并测试**
+- [x] **Step 1：写失败的来源合并测试**
 
   DOM 摘要提供岗位或城市，Vue 提供完整经历；最终保留两类信息。Vue 同字段优先；不同读取会话不得合并；logged-out 仍有安全优先级。
 
-- [ ] **Step 2：用来源聚合替代唯一 frame 选择**
+- [x] **Step 2：用来源聚合替代唯一 frame 选择**
 
   保留 `selectBestParserRelay` 供历史 DOM 诊断使用，但完整简历展示改为 `composeCandidateReading(domRelays, vueSnapshot, sessionId)`，不得按可见元素数选择正文来源。
 
-- [ ] **Step 3：界面显示来源和覆盖率**
+- [x] **Step 3：界面显示来源和覆盖率**
 
   显示“Vue 精确读取”或“DOM 摘要”；不得把 Vue 结果标记成 OCR，也不得把演示 92% 分数标记成真实评估。
 
-- [ ] **Step 4：运行聚焦测试并提交**
+- [x] **Step 4：运行聚焦测试并提交**
+
+  2026-08-07 实际结果：首轮 6 个预期失败证明来源合并与界面展示尚未实现；实现后聚焦测试 3 个文件、73 个测试通过。代码审阅新增唯一问题指纹 `vue-empty-array-restored-stale-dom`，聚焦测试先稳定复现，再修复为 Vue 明确存在的空数组仍优先；最终聚焦测试 3 个文件、74 个测试通过，类型检查通过。
 
   ```powershell
   npm.cmd run test --workspace extension -- src/parser/client.test.ts src/components/PageReadingCard.test.tsx --run
@@ -449,7 +451,7 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 - 修改：`docs/validation/m2-loop-log.md`
 - 修改：本文件
 
-- [ ] **Step 1：运行聚焦安全扫描**
+- [x] **Step 1：运行聚焦安全扫描**
 
   ```powershell
   rg -n "chrome\.debugger|webRequest|cookies|localStorage|sessionStorage|\.click\(|\.focus\(|scrollTo\(|scrollBy\(|fetch\(" extension/src/parser extension/src/background.ts
@@ -457,7 +459,9 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 
   允许的 `fetch` 只能是既有固定 localhost API transport；新 Vue 读取文件中必须为 0。
 
-- [ ] **Step 2：运行完整闭合**
+- [x] **Step 2：运行完整闭合**
+
+  2026-08-07 标准 `npm.cmd run verify` 在可访问本机 Python 3.14 的终端中 exit code 0：后端 12 个测试通过；扩展 19 个测试文件、217 个测试通过；TypeScript 类型检查与 content/background 生产构建通过。受限终端中的首次运行因不可见 Python 3.14 而在测试启动前失败，该环境失败未被当作代码通过记录。
 
   ```powershell
   npm.cmd run verify
@@ -465,7 +469,9 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 
   预期：backend、extension tests、TypeScript 和 production build 全部 exit code 0。
 
-- [ ] **Step 3：Review 本轮差异**
+- [x] **Step 3：Review 本轮差异**
+
+  Review 只发现并修复 `vue-empty-array-restored-stale-dom`；安全扫描未发现本轮新增的自动点击、聚焦、滚动、浏览器存储、Cookie、debugger 或网络请求。
 
   只修复本轮新发现且有证据的问题，不重复无意义执行全量流程。每个修复必须记录唯一问题指纹和聚焦测试。
 

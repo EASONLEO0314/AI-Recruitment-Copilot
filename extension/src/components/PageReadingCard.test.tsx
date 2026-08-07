@@ -62,7 +62,7 @@ describe('PageReadingCard', () => {
       <PageReadingCard snapshot={partialSnapshot} onRefresh={vi.fn()} refreshing={false} />,
     );
 
-    expect(screen.getByText('BOSS 页面（仅本地）')).toBeInTheDocument();
+    expect(screen.getByText('DOM 摘要（仅本地）')).toBeInTheDocument();
     expect(screen.getByText('候选人甲')).toBeInTheDocument();
     expect(screen.getByText('平台工程师')).toBeInTheDocument();
     expect(screen.getByText('上海')).toBeInTheDocument();
@@ -87,6 +87,24 @@ describe('PageReadingCard', () => {
     expect(screen.getByText('0 年经验')).toBeInTheDocument();
     expect(screen.getByText('字段覆盖率 100%')).toBeInTheDocument();
     expect(screen.queryByText(/缺少：/)).not.toBeInTheDocument();
+  });
+
+  it('labels a Vue profile as an exact local read', () => {
+    const snapshot: ParserSnapshot = {
+      ...readySnapshot,
+      parser_version: 'boss-vue-v1',
+    };
+
+    render(
+      <PageReadingCard snapshot={snapshot} onRefresh={vi.fn()} refreshing={false} />,
+    );
+
+    expect(screen.getByText('Vue 精确读取（仅本地）')).toBeInTheDocument();
+    expect(screen.getByText('工作 1')).toBeInTheDocument();
+    expect(screen.getByText('教育 1')).toBeInTheDocument();
+    expect(screen.getByText('项目 1')).toBeInTheDocument();
+    expect(screen.queryByText('OCR')).not.toBeInTheDocument();
+    expect(screen.queryByText('真实评估')).not.toBeInTheDocument();
   });
 
   it.each([

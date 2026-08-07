@@ -1,10 +1,13 @@
 import type {
+  CandidateProfile,
   ParserRefreshRequest,
   ParserRelayMessage,
+  ParserSnapshot,
   ResumeReadRequest,
   ResumeReadResponse,
 } from '../contracts';
 import { isParserSnapshot, isRecord, isResumeReadResponse } from '../validation';
+import { buildProfileSnapshot } from './snapshot';
 
 
 const REFRESH_REQUEST: ParserRefreshRequest = { type: 'ARC_PARSER_REFRESH' };
@@ -22,6 +25,17 @@ export type ParserSelectionReason =
 export interface ParserRelaySelection {
   relay: ParserRelayMessage;
   reason: ParserSelectionReason;
+}
+
+export interface SessionParserSnapshot {
+  session_id: string;
+  snapshot: ParserSnapshot;
+}
+
+export interface CandidateReading {
+  session_id: string;
+  source: 'dom_summary' | 'vue_exact';
+  snapshot: ParserSnapshot;
 }
 
 
@@ -178,6 +192,96 @@ export function selectBestParserRelay(
   const relay = relays.reduce<ParserRelayMessage | null>((best, candidate) =>
     !best || compareQuality(candidate, best) > 0 ? candidate : best, null);
   return relay ? { relay, reason: selectionReason(relay) } : null;
+}
+
+
+function mergeProfile(
+  domProfile: CandidateProfile | undefined,
+  vueProfile: CandidateProfile,
+  vueWarnings: readonly string[],
+): CandidateProfile {
+  const preferredArray = <T>(
+    vueItems: T[],
+    domItems: T[] | undefined,
+    sourceKey: string,
+  ): T[] => (
+    vueItems.length > 0 || vueWarnings.includes(`vue-capability:key=${sourceKey}`)
+      ? vueItems
+      : domItems ?? []
+  );
+
+  return {
+    education: preferredArray(
+      vueProfile.education,
+      domProfile?.education,
+      'geekEduExpList',
+    ),
+    work_experiences: preferredArray(
+      vueProfile.work_experiences,
+      domProfile?.work_experiences,
+      'geekWorkExpList',
+    ),
+    project_experiences: preferredArray(
+      vueProfile.project_experiences,
+      domProfile?.project_experiences,
+      'geekProjExpList',
+    ),
+    skills: preferredArray(vueProfile.skills, domProfile?.skills, 'skillTagList'),
+    display_name: vueProfile.display_name ?? domProfile?.display_name,
+    current_title: vueProfile.current_title ?? domProfile?.current_title,
+    location: vueProfile.location ?? domProfile?.location,
+    experience_years: vueProfile.experience_years ?? domProfile?.experience_years,
+    expected_position: vueProfile.expected_position ?? domProfile?.expected_position,
+    expected_city: vueProfile.expected_city ?? domProfile?.expected_city,
+    summary: vueProfile.summary ?? domProfile?.summary,
+  };
+}
+
+
+export function composeCandidateReading(
+  domRelays: readonly ParserRelayMessage[],
+  vueSnapshot: SessionParserSnapshot | null,
+  sessionId: string,
+): CandidateReading | null {
+  const domSelection = selectBestParserRelay(domRelays);
+  if (domSelection?.relay.snapshot.page_kind === 'logged_out') {
+    return {
+      session_id: sessionId,
+      source: 'dom_summary',
+      snapshot: domSelection.relay.snapshot,
+    };
+  }
+
+  const exactVueSnapshot = vueSnapshot?.session_id === sessionId
+    && vueSnapshot.snapshot.parser_version === 'boss-vue-v1'
+    && vueSnapshot.snapshot.profile
+    ? vueSnapshot.snapshot
+    : null;
+  if (!exactVueSnapshot?.profile) {
+    return domSelection
+      ? {
+          session_id: sessionId,
+          source: 'dom_summary',
+          snapshot: domSelection.relay.snapshot,
+        }
+      : null;
+  }
+
+  const domProfile = domSelection?.relay.snapshot.profile;
+  const merged = buildProfileSnapshot(
+    exactVueSnapshot.page_kind,
+    mergeProfile(domProfile, exactVueSnapshot.profile, exactVueSnapshot.warnings),
+    new Date(exactVueSnapshot.captured_at),
+  );
+  return {
+    session_id: sessionId,
+    source: 'vue_exact',
+    snapshot: {
+      ...merged,
+      parser_version: 'boss-vue-v1',
+      warnings: exactVueSnapshot.warnings,
+    },
+  };
 }
 
 

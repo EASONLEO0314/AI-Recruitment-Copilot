@@ -180,6 +180,35 @@ npm.cmd run verify
 - 账号、权限和多人协作。
 - 自动点击、滚动、导航、打开候选人、翻页、输入、采集或发送消息。
 
+## 2026-08-07 Vue 精确简历读取与来源合并
+
+### 能力确认
+
+- 匿名样本 `sample-01` 由用户手动打开候选人并点击一次“读取当前简历”。
+- 已观察到可见 `.lib-resume-recommend`、Vue 2 和 `resumeInfo`；允许字段 4，工作数组 1、教育数组 2、项目数组 1。
+- 能力阶段只记录字段名与数量，没有记录候选人字段值。
+
+### 白名单映射
+
+- MAIN world 读取只访问固定 Vue 入口与已确认字段路径；限制可见根、遍历元素、祖先层级、数组条目与字符串长度。
+- 不递归枚举 Vue 状态，不序列化任意对象，不读取 Cookie、Token、浏览器存储或请求头。
+- Task 4 聚焦测试 4 个文件、38 个测试通过；当时扩展全量 19 个测试文件、211 个测试通过；类型检查和生产构建通过。
+- 提交：`74ca305 feat: map authorized BOSS Vue resume data`。
+
+### 来源合并自检循环
+
+| 轮次 | 唯一问题指纹 | 新证据 | 修复 | 聚焦结果 |
+|---:|---|---|---|---|
+| 1 | `candidate-source-composition-missing` | 新增来源、会话、未登录优先和界面用例后 6 项按预期失败 | 实现会话化 Vue/DOM 合并与来源标签 | 3 个文件、73 项通过 |
+| 2 | `vue-empty-array-restored-stale-dom` | Vue 明确返回空工作数组时，旧 DOM 工作项被错误补回 | 以能力字段存在性判定 Vue 数组权威性 | 3 个文件、74 项通过 |
+
+### 完整闭合
+
+- 受限终端首次执行 `npm.cmd run verify` 时，项目脚本在测试启动前无法看见用户目录中的 Python 3.14；这属于执行环境失败，不是测试失败。
+- 在可访问本机 Python 3.14 的终端重新执行同一标准命令，exit code 0：backend 12 passed；extension 19 个 test files、217 tests passed；`tsc --noEmit` exit 0；content/background production build exit 0。
+- 本轮安全扫描未发现新增的自动点击、聚焦、滚动、BOSS 网络请求、浏览器存储、Cookie 或 debugger 使用。
+- 尚未完成 5 个授权匿名样本的字段级人工验收，因此暂不计算准确率，也不宣布 Vue 读取阶段最终通过。
+
 ## 未登录公开职位临时探针（已中止）
 
 - 日期：2026-07-30。

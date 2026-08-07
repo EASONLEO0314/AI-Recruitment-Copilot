@@ -257,6 +257,42 @@ describe('CopilotPanel', () => {
     expect(screen.getByText('允许字段 1')).toBeInTheDocument();
   });
 
+  it('shows the merged Vue exact profile after the explicit read', async () => {
+    const user = userEvent.setup();
+    parserClient.requestResume.mockResolvedValue({
+      ok: true,
+      snapshot: {
+        ...buildProfileSnapshot('recommend_frame', {
+          display_name: '候选人乙',
+          education: [{ school: '匿名大学' }],
+          work_experiences: [{ company: '匿名公司' }],
+          project_experiences: [{ name: '匿名项目' }],
+          skills: ['Python'],
+        }, new Date('2026-08-07T02:00:00.000Z')),
+        parser_version: 'boss-vue-v1',
+        warnings: [
+          'vue-capability:root=lib-resume-recommend',
+          'vue-capability:generation=vue2',
+          'vue-capability:resume-object=resumeInfo',
+          'vue-capability:key=geekWorkExpList',
+        ],
+      },
+    });
+    render(<CopilotPanel />);
+    await screen.findByText('92%');
+    act(() => parserClient.emit(partialRelay));
+
+    await user.click(screen.getByRole('button', { name: '读取当前简历' }));
+
+    expect(await screen.findByText('Vue 精确读取（仅本地）')).toBeInTheDocument();
+    expect(screen.getByText('候选人乙')).toBeInTheDocument();
+    expect(screen.getByText('工作 1')).toBeInTheDocument();
+    expect(screen.getByText('教育 1')).toBeInTheDocument();
+    expect(screen.getByText('项目 1')).toBeInTheDocument();
+    expect(screen.getByText('演示数据')).toBeInTheDocument();
+    expect(screen.queryByText('真实评估')).not.toBeInTheDocument();
+  });
+
   it('blocks repeated resume reads in flight and renders only the fixed failure copy', async () => {
     let resolveRead: (value: { ok: false; error: 'vue-instance-not-found' }) => void = () => undefined;
     parserClient.requestResume.mockReturnValue(new Promise((resolve) => {

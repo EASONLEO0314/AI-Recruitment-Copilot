@@ -306,7 +306,11 @@ function ProfileReading({ snapshot }: { snapshot: ParserSnapshot }) {
 
   return (
     <>
-      <span className="arc-reading__badge">BOSS 页面（仅本地）</span>
+      <span className="arc-reading__badge">
+        {snapshot.parser_version === 'boss-vue-v1'
+          ? 'Vue 精确读取（仅本地）'
+          : 'DOM 摘要（仅本地）'}
+      </span>
       <strong>{profile?.display_name ?? '当前候选人'}</strong>
 
       {(profile?.current_title || profile?.location || profile?.experience_years !== undefined) && (

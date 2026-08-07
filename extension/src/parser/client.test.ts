@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { PageKind, ParserRelayMessage, ParserStatus } from '../contracts';
+import type {
+  PageKind,
+  ParserRelayMessage,
+  ParserSnapshot,
+  ParserStatus,
+} from '../contracts';
 import {
   acceptParserRelay,
+  composeCandidateReading,
   isParserRelayMessage,
   requestParserRefresh,
   requestResumeRead,
@@ -316,6 +322,154 @@ describe('parser frame registry and deterministic selection', () => {
 
     expect(selection?.relay).toBe(semanticFrame);
     expect(selection?.reason).toBe('semantic_headings');
+  });
+});
+
+
+describe('candidate reading source composition', () => {
+  const vueSnapshot: ParserSnapshot = {
+    ...buildProfileSnapshot('recommend_frame', {
+      display_name: '候选人甲',
+      current_title: 'Vue 精确岗位',
+      education: [{ school: '匿名大学' }],
+      work_experiences: [{ company: '匿名公司', title: '工程师' }],
+      project_experiences: [{ name: '匿名项目' }],
+      skills: ['TypeScript'],
+    }, new Date('2026-08-07T02:00:00.000Z')),
+    parser_version: 'boss-vue-v1',
+    warnings: ['vue-capability:resume-object=resumeInfo'],
+  };
+
+  it('keeps DOM-only summary fields while preferring Vue values for the same field', () => {
+    const dom = frameRelay(
+      4,
+      'recommend_frame',
+      'partial',
+      '2026-08-07T01:59:59.000Z',
+    );
+    dom.snapshot = buildProfileSnapshot('recommend_frame', {
+      display_name: 'DOM 候选人',
+      current_title: 'DOM 摘要岗位',
+      location: '上海',
+      education: [],
+      work_experiences: [],
+      project_experiences: [],
+      skills: [],
+    }, new Date('2026-08-07T01:59:59.000Z'));
+
+    const reading = composeCandidateReading(
+      [dom],
+      { session_id: 'read-1', snapshot: vueSnapshot },
+      'read-1',
+    );
+
+    expect(reading).toMatchObject({
+      session_id: 'read-1',
+      source: 'vue_exact',
+      snapshot: {
+        parser_version: 'boss-vue-v1',
+        profile: {
+          display_name: '候选人甲',
+          current_title: 'Vue 精确岗位',
+          location: '上海',
+          work_experiences: [{ company: '匿名公司', title: '工程师' }],
+          education: [{ school: '匿名大学' }],
+          project_experiences: [{ name: '匿名项目' }],
+          skills: ['TypeScript'],
+        },
+      },
+    });
+  });
+
+  it('does not merge a Vue snapshot from a different read session', () => {
+    const dom = frameRelay(
+      4,
+      'recommend_frame',
+      'partial',
+      '2026-08-07T01:59:59.000Z',
+    );
+    dom.snapshot = buildProfileSnapshot('recommend_frame', {
+      display_name: '当前 DOM 候选人',
+      education: [],
+      work_experiences: [],
+      project_experiences: [],
+      skills: [],
+    }, new Date('2026-08-07T01:59:59.000Z'));
+
+    const reading = composeCandidateReading(
+      [dom],
+      { session_id: 'old-read', snapshot: vueSnapshot },
+      'current-read',
+    );
+
+    expect(reading).toMatchObject({
+      session_id: 'current-read',
+      source: 'dom_summary',
+      snapshot: {
+        parser_version: 'boss-dom-v1',
+        profile: { display_name: '当前 DOM 候选人' },
+      },
+    });
+    expect(JSON.stringify(reading)).not.toContain('候选人甲');
+  });
+
+  it('keeps an explicitly present empty Vue array instead of restoring stale DOM items', () => {
+    const dom = frameRelay(
+      4,
+      'recommend_frame',
+      'partial',
+      '2026-08-07T01:59:59.000Z',
+    );
+    dom.snapshot = buildProfileSnapshot('recommend_frame', {
+      education: [],
+      work_experiences: [{ company: '旧 DOM 公司' }],
+      project_experiences: [],
+      skills: [],
+    }, new Date('2026-08-07T01:59:59.000Z'));
+    const exactEmptyWork: ParserSnapshot = {
+      ...buildProfileSnapshot('recommend_frame', {
+        education: [],
+        work_experiences: [],
+        project_experiences: [],
+        skills: [],
+      }, new Date('2026-08-07T02:00:00.000Z')),
+      parser_version: 'boss-vue-v1',
+      warnings: [
+        'vue-capability:resume-object=resumeInfo',
+        'vue-capability:key=geekWorkExpList',
+        'vue-capability:array=geekWorkExpList:0',
+      ],
+    };
+
+    const reading = composeCandidateReading(
+      [dom],
+      { session_id: 'read-1', snapshot: exactEmptyWork },
+      'read-1',
+    );
+
+    expect(reading?.snapshot.profile?.work_experiences).toEqual([]);
+    expect(JSON.stringify(reading)).not.toContain('旧 DOM 公司');
+  });
+
+  it('keeps logged-out DOM state authoritative over a matching Vue session', () => {
+    const loggedOut = frameRelay(
+      0,
+      'logged_out',
+      'ready',
+      '2026-08-07T02:00:01.000Z',
+    );
+
+    const reading = composeCandidateReading(
+      [loggedOut],
+      { session_id: 'read-1', snapshot: vueSnapshot },
+      'read-1',
+    );
+
+    expect(reading).toEqual({
+      session_id: 'read-1',
+      source: 'dom_summary',
+      snapshot: loggedOut.snapshot,
+    });
   });
 });
 
