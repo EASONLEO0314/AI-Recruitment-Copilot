@@ -142,6 +142,11 @@ function capabilitySnapshot(
         ? `vue-schema:key=${key}:${type}:${arrayLength}`
         : `vue-schema:key=${key}:${type}`
     )),
+    ...probe.nested_schema.map(({ container, key, type, array_length: arrayLength }) => (
+      type === 'array'
+        ? `vue-nested-schema:container=${container}:key=${key}:${type}:${arrayLength}`
+        : `vue-nested-schema:container=${container}:key=${key}:${type}`
+    )),
   ];
 
   const snapshot = buildProfileSnapshot(

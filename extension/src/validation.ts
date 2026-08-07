@@ -144,7 +144,7 @@ const PAGE_KINDS = [
 const PARSER_STATUSES = ['waiting', 'ready', 'partial', 'unsupported', 'error'] as const;
 const PARSER_VERSIONS = ['boss-dom-v1', 'boss-vue-v1'] as const;
 const DOM_WARNING_MAX_ITEMS = 40;
-const VUE_WARNING_MAX_ITEMS = 64;
+const VUE_WARNING_MAX_ITEMS = 96;
 
 
 function isEducationExperience(value: unknown): boolean {

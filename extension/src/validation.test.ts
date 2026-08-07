@@ -60,21 +60,21 @@ describe('resume read response validation', () => {
     })).toBe(false);
     expect(isResumeReadResponse?.({
       ok: true,
-      snapshot: { ...vueCapabilitySnapshot, warnings: Array(65).fill('bounded') },
+      snapshot: { ...vueCapabilitySnapshot, warnings: Array(97).fill('bounded') },
     })).toBe(false);
   });
 
-  it('accepts the bounded 53-warning diagnostic bundle produced by a 40-field schema', () => {
+  it('accepts the bounded 93-warning nested diagnostic bundle without widening DOM snapshots', () => {
     const { isResumeReadResponse } = resumeReadValidators();
 
     expect(isResumeReadResponse?.({
       ok: true,
-      snapshot: { ...vueCapabilitySnapshot, warnings: Array(53).fill('bounded') },
+      snapshot: { ...vueCapabilitySnapshot, warnings: Array(93).fill('bounded') },
     })).toBe(true);
     expect(validation.isParserSnapshot({
       ...vueCapabilitySnapshot,
       parser_version: 'boss-dom-v1',
-      warnings: Array(53).fill('bounded'),
+      warnings: Array(41).fill('bounded'),
     })).toBe(false);
   });
 

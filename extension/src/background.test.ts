@@ -264,7 +264,19 @@ describe('MAIN-world resume read handler', () => {
           { key: 'professionalSkillInfo', type: 'string' },
           { key: 'unknownList', type: 'array', array_length: 50 },
         ],
-        nested_schema: [],
+        nested_schema: [
+          {
+            container: 'geekDetailInfo',
+            key: 'professionalSkill',
+            type: 'string',
+          },
+          {
+            container: 'geekDetailInfo',
+            key: 'skillItems',
+            type: 'array',
+            array_length: 50,
+          },
+        ],
         profile: {
           display_name: '候选人甲',
           education: [],
@@ -325,6 +337,8 @@ describe('MAIN-world resume read handler', () => {
           'vue-schema:key=geekBaseInfo:object',
           'vue-schema:key=professionalSkillInfo:string',
           'vue-schema:key=unknownList:array:50',
+          'vue-nested-schema:container=geekDetailInfo:key=professionalSkill:string',
+          'vue-nested-schema:container=geekDetailInfo:key=skillItems:array:50',
         ],
       },
     });
