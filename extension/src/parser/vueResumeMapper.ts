@@ -462,7 +462,8 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
     return { status: 'vue-root-not-found' };
   }
 
-  const ready: Array<Extract<VueResumeProfileFrameProbe, { status: 'ready' }>> = [];
+  type ReadyProbe = Extract<VueResumeProfileFrameProbe, { status: 'ready' }>;
+  const ready: Array<{ probe: ReadyProbe; resumeInfo: Record<string, unknown> }> = [];
   let firstVueHandle: { root: VueResumeRoot; generation: VueGeneration } | undefined;
   for (const selectedRoot of selectedRoots) {
     for (const handle of vueHandles(selectedRoot.element)) {
@@ -472,18 +473,24 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
         continue;
       }
       ready.push({
-        status: 'ready',
-        capability: capabilityFor(selectedRoot.root, handle.generation, resumeInfo),
-        profile: mapProfile(resumeInfo),
-        schema: schemaForRecord(resumeInfo),
-        nested_schema: nestedSchemaFor(resumeInfo),
+        probe: {
+          status: 'ready',
+          capability: capabilityFor(selectedRoot.root, handle.generation, resumeInfo),
+          profile: mapProfile(resumeInfo),
+          schema: schemaForRecord(resumeInfo),
+          nested_schema: [],
+        },
+        resumeInfo,
       });
     }
   }
 
-  ready.sort((left, right) => profileScore(right.profile) - profileScore(left.profile));
+  ready.sort((left, right) => profileScore(right.probe.profile) - profileScore(left.probe.profile));
   if (ready.length > 0) {
-    return ready[0];
+    return {
+      ...ready[0].probe,
+      nested_schema: nestedSchemaFor(ready[0].resumeInfo),
+    };
   }
   if (firstVueHandle) {
     return {

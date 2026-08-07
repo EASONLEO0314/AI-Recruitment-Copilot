@@ -291,19 +291,39 @@ describe('MAIN-world Vue resume profile mapper', () => {
     markVisible(hiddenRoot);
     markVisible(sparseRoot);
     markVisible(richRoot);
+    let sparseDetailCalls = 0;
+    const sparseResumeInfo: Record<string, unknown> = {
+      geekBaseInfo: { name: '稀疏候选人' },
+    };
+    Object.defineProperty(sparseResumeInfo, 'geekDetailInfo', {
+      enumerable: true,
+      get: () => {
+        sparseDetailCalls += 1;
+        return { privateSkill: '不得读取稀疏候选人技能' };
+      },
+    });
+    let richDetailCalls = 0;
+    const richResumeInfo: Record<string, unknown> = {
+      geekBaseInfo: { name: '候选人乙' },
+      geekWorkExpList: [{ company: '示例公司' }],
+      geekEduExpList: [{ school: '示例大学' }],
+    };
+    Object.defineProperty(richResumeInfo, 'geekDetailInfo', {
+      enumerable: true,
+      get: () => {
+        richDetailCalls += 1;
+        return { selectedSkillField: '不得读取选中候选人技能' };
+      },
+    });
     attachProperty(hiddenRoot, '__vue__', {
       resumeInfo: { geekWorkExpList: [{ company: '隐藏公司' }] },
     });
     attachProperty(sparseRoot, '__vue__', {
-      resumeInfo: { geekBaseInfo: { name: '稀疏候选人' } },
+      resumeInfo: sparseResumeInfo,
     });
     attachProperty(richRoot, '__vueParentComponent', {
       setupState: {
-        resumeInfo: {
-          geekBaseInfo: { name: '候选人乙' },
-          geekWorkExpList: [{ company: '示例公司' }],
-          geekEduExpList: [{ school: '示例大学' }],
-        },
+        resumeInfo: richResumeInfo,
       },
     });
 
@@ -317,9 +337,17 @@ describe('MAIN-world Vue resume profile mapper', () => {
         work_experiences: [{ company: '示例公司' }],
         education: [{ school: '示例大学' }],
       },
+      nested_schema: [{
+        container: 'geekDetailInfo',
+        key: 'selectedSkillField',
+        type: 'string',
+      }],
     });
+    expect(sparseDetailCalls).toBe(0);
+    expect(richDetailCalls).toBe(1);
     expect(JSON.stringify(result)).not.toContain('隐藏公司');
     expect(JSON.stringify(result)).not.toContain('稀疏候选人');
+    expect(JSON.stringify(result)).not.toContain('不得读取');
   });
 
   it('does not recurse into circular objects or expose throwing getters', () => {
