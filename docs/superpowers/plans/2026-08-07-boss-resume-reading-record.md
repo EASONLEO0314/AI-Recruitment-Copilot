@@ -202,11 +202,11 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 - 修改：`extension/src/validation.ts`
 - 测试：`extension/src/validation.test.ts`（新建）
 
-- [ ] **Step 1：先写失败的 Manifest 测试**
+- [x] **Step 1：先写失败的 Manifest 测试**
 
   断言只新增 `scripting` 权限和 `https://www.zhipin.com/*` host permission；不得新增 `<all_urls>`、`tabs`、`debugger`、`webRequest` 或 Cookie 权限。
 
-- [ ] **Step 2：运行聚焦测试并确认失败**
+- [x] **Step 2：运行聚焦测试并确认失败**
 
   ```powershell
   npm.cmd run test --workspace extension -- src/manifest.test.ts --run
@@ -214,7 +214,7 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 
   预期：因缺少 `scripting` 和 BOSS host permission 失败。
 
-- [ ] **Step 3：定义读取请求与响应契约**
+- [x] **Step 3：定义读取请求与响应契约**
 
   ```ts
   type ResumeReadErrorCode =
@@ -234,11 +234,11 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
     | { ok: false; error: ResumeReadErrorCode };
   ```
 
-- [ ] **Step 4：实现最小 Manifest 变更和严格校验器**
+- [x] **Step 4：实现最小 Manifest 变更和严格校验器**
 
   校验器必须拒绝未知顶层键、超长字符串、超过 50 项的数组，以及不是 `boss-dom-v1` / `boss-vue-v1` 的 parser version。
 
-- [ ] **Step 5：运行测试、类型检查并提交**
+- [x] **Step 5：运行测试、类型检查并提交**
 
   ```powershell
   npm.cmd run test --workspace extension -- src/manifest.test.ts src/validation.test.ts --run

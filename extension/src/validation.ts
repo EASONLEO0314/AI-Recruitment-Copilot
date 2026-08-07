@@ -6,7 +6,10 @@ import type {
   MessageSuggestion,
   ParserSnapshot,
 } from './contracts';
-import { RESUME_ITEM_RAW_TEXT_MAX_LENGTH } from './contracts';
+import {
+  RESUME_ITEM_RAW_TEXT_MAX_LENGTH,
+  RESUME_READ_ERROR_CODES,
+} from './contracts';
 
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
@@ -139,6 +142,7 @@ const PAGE_KINDS = [
 ] as const;
 
 const PARSER_STATUSES = ['waiting', 'ready', 'partial', 'unsupported', 'error'] as const;
+const PARSER_VERSIONS = ['boss-dom-v1', 'boss-vue-v1'] as const;
 
 
 function isEducationExperience(value: unknown): boolean {
@@ -209,7 +213,7 @@ export function isParserSnapshot(value: unknown): value is ParserSnapshot {
   }
 
   return value.schema_version === 1
-    && value.parser_version === 'boss-dom-v1'
+    && PARSER_VERSIONS.includes(value.parser_version as typeof PARSER_VERSIONS[number])
     && PAGE_KINDS.includes(value.page_kind as typeof PAGE_KINDS[number])
     && PARSER_STATUSES.includes(value.status as typeof PARSER_STATUSES[number])
     && typeof value.captured_at === 'string'
@@ -219,4 +223,29 @@ export function isParserSnapshot(value: unknown): value is ParserSnapshot {
     && isBoundedStringArray(value.present_fields, 50)
     && isBoundedStringArray(value.missing_fields, 50)
     && isBoundedStringArray(value.warnings, 40);
+}
+
+
+export function isResumeReadRequest(value: unknown): boolean {
+  return isRecord(value)
+    && hasOnlyKeys(value, ['type'])
+    && value.type === 'ARC_RESUME_READ';
+}
+
+
+export function isResumeReadResponse(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.ok !== 'boolean') {
+    return false;
+  }
+
+  if (value.ok) {
+    return hasOnlyKeys(value, ['ok', 'snapshot'])
+      && isParserSnapshot(value.snapshot)
+      && value.snapshot.parser_version === 'boss-vue-v1';
+  }
+
+  return hasOnlyKeys(value, ['ok', 'error'])
+    && RESUME_READ_ERROR_CODES.includes(
+      value.error as typeof RESUME_READ_ERROR_CODES[number],
+    );
 }

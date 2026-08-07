@@ -73,6 +73,22 @@ export interface ApiSuccess<T> {
 export type ApiRuntimeResponse<T> = ApiSuccess<T> | ApiFailure;
 
 
+export const RESUME_READ_ERROR_CODES = [
+  'vue-root-not-found',
+  'vue-instance-not-found',
+  'vue-resume-data-unavailable',
+  'vue-schema-unsupported',
+  'vue-result-invalid',
+  'vue-read-failed',
+] as const;
+
+export type ResumeReadErrorCode = typeof RESUME_READ_ERROR_CODES[number];
+
+export interface ResumeReadRequest {
+  type: 'ARC_RESUME_READ';
+}
+
+
 export type PageKind =
   | 'logged_out'
   | 'non_candidate'
@@ -124,7 +140,7 @@ export interface CandidateProfile {
 
 export interface ParserSnapshot {
   schema_version: 1;
-  parser_version: 'boss-dom-v1';
+  parser_version: 'boss-dom-v1' | 'boss-vue-v1';
   page_kind: PageKind;
   status: ParserStatus;
   captured_at: string;
@@ -153,3 +169,7 @@ export interface ParserRelayMessage {
   snapshot: ParserSnapshot;
   source: { frame_id: number; document_id: string };
 }
+
+export type ResumeReadResponse =
+  | { ok: true; snapshot: ParserSnapshot }
+  | { ok: false; error: ResumeReadErrorCode };

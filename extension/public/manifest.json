@@ -5,10 +5,12 @@
   "description": "A local-first recruitment copilot demo for candidate review.",
   "permissions": [
     "clipboardWrite",
-    "storage"
+    "storage",
+    "scripting"
   ],
   "host_permissions": [
-    "http://127.0.0.1:8765/*"
+    "http://127.0.0.1:8765/*",
+    "https://www.zhipin.com/*"
   ],
   "background": {
     "service_worker": "background.js"
