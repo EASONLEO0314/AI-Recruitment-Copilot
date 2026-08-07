@@ -377,23 +377,27 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 - 修改：`extension/src/validation.ts`
 - 修改：`extension/src/background.ts`
 
-- [ ] **Step 1：根据确认的字段名创建完全匿名的最小 fixture**
+- [x] **Step 1：根据确认的字段名创建完全匿名的最小 fixture**
 
   fixture 包含两条工作、一条教育、一条项目和技能数组，用于证明映射数量、顺序、限长和空字段处理；不得复制真实候选人值。
 
-- [ ] **Step 2：写失败测试**
+- [x] **Step 2：写失败测试**
 
   测试必须覆盖：正确映射、未知字段忽略、隐藏/非当前根忽略、数组上限、字符串上限、循环对象安全失败、多个结果按实际结构化字段完整度选择。
 
-- [ ] **Step 3：实现白名单映射**
+- [x] **Step 3：实现白名单映射**
 
   只映射经过 Task 3 确认的路径。不得使用 `JSON.stringify(vueInstance)`，不得递归遍历所有 Vue 状态，不得以任意 key 猜测字段含义。
 
-- [ ] **Step 4：生成 `boss-vue-v1` 快照**
+- [x] **Step 4：生成 `boss-vue-v1` 快照**
 
   快照继续使用现有 `CandidateProfile`；`warnings` 只能包含固定枚举；`fingerprint` 只能来自规范化结构的单向摘要，不能保存明文身份字段。
 
-- [ ] **Step 5：运行聚焦测试并提交**
+  2026-08-07 映射依据：重新下载公开离线包后 SHA-256 仍为 `AF2727353265B68EAA6AACBD4F2E8B80A08488562C46656CE4C42832AF5A4548`。仅静态确认并采用固定路径：基础信息 `name/positionName/workYear/cityName/expectInfo`；工作 `company/positionName/startYearMonStr/endYearMonStr/responsibility/workContent`；项目 `name/roleName/startDateDesc/endDateDesc/description/performance`；教育 `school/major/degreeName/startDateDesc/endDateDesc/experienceDesc`；技能只接受字符串或 `name`。安装包未安装、未运行、未连接 BOSS。
+
+- [x] **Step 5：运行聚焦测试并提交**
+
+  2026-08-07 实际结果：映射与后台聚焦测试共 4 个测试文件、38 个测试通过；扩展全量 19 个测试文件、211 个测试通过；TypeScript 类型检查与生产构建通过；Vue profile 路径安全扫描未发现自动点击、滚动、BOSS 网络请求、任意对象序列化或控制台输出。
 
   ```powershell
   npm.cmd run test --workspace extension -- src/parser/vueResumeMapper.test.ts src/parser/vueResumeProbe.test.ts src/background.test.ts src/validation.test.ts --run

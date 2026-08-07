@@ -259,6 +259,16 @@ describe('MAIN-world resume read handler', () => {
           allowed_keys: ['geekBaseInfo', 'geekWorkExpList'],
           array_lengths: { geekWorkExpList: 2 },
         },
+        profile: {
+          display_name: '候选人甲',
+          education: [],
+          work_experiences: [
+            { company: '示例公司甲' },
+            { company: '示例公司乙' },
+          ],
+          project_experiences: [],
+          skills: [],
+        },
       },
     }]);
 
@@ -281,8 +291,24 @@ describe('MAIN-world resume read handler', () => {
         page_kind: 'recommend_frame',
         status: 'partial',
         captured_at: '2026-08-07T02:00:00.000Z',
-        present_fields: [],
-        missing_fields: [],
+        fingerprint: expect.stringMatching(/^v1-[0-9a-f]{8}$/),
+        profile: {
+          display_name: '候选人甲',
+          education: [],
+          work_experiences: [
+            { company: '示例公司甲' },
+            { company: '示例公司乙' },
+          ],
+          project_experiences: [],
+          skills: [],
+        },
+        present_fields: ['work_experiences', 'display_name'],
+        missing_fields: [
+          'education',
+          'project_experiences',
+          'skills',
+          'experience_years',
+        ],
         warnings: [
           'vue-capability:root=lib-resume-recommend',
           'vue-capability:generation=vue2',
@@ -295,7 +321,7 @@ describe('MAIN-world resume read handler', () => {
     });
   });
 
-  it('selects the valid frame with the richest whitelisted capability', async () => {
+  it('selects the valid frame with the richest mapped profile', async () => {
     const executeScript = vi.fn().mockResolvedValue([
       {
         frameId: 3,
@@ -305,8 +331,15 @@ describe('MAIN-world resume read handler', () => {
             root: 'lib-resume-anonymous',
             vue_generation: 'vue2',
             resume_object: 'resumeInfo',
-            allowed_keys: ['geekBaseInfo'],
-            array_lengths: {},
+            allowed_keys: ['geekBaseInfo', 'geekWorkExpList'],
+            array_lengths: { geekWorkExpList: 1 },
+          },
+          profile: {
+            display_name: '稀疏候选人',
+            education: [],
+            work_experiences: [],
+            project_experiences: [],
+            skills: [],
           },
         },
       },
@@ -319,7 +352,14 @@ describe('MAIN-world resume read handler', () => {
             vue_generation: 'vue3',
             resume_object: 'resumeInfo',
             allowed_keys: ['geekBaseInfo', 'geekWorkExpList'],
-            array_lengths: { geekWorkExpList: 3 },
+            array_lengths: { geekWorkExpList: 1 },
+          },
+          profile: {
+            display_name: '候选人乙',
+            education: [{ school: '示例大学' }],
+            work_experiences: [{ company: '示例公司' }],
+            project_experiences: [],
+            skills: [],
           },
         },
       },
@@ -332,7 +372,9 @@ describe('MAIN-world resume read handler', () => {
     );
 
     expect(JSON.stringify(response)).toContain('vue-capability:generation=vue3');
-    expect(JSON.stringify(response)).toContain('vue-capability:array=geekWorkExpList:3');
+    expect(JSON.stringify(response)).toContain('vue-capability:array=geekWorkExpList:1');
+    expect(JSON.stringify(response)).toContain('候选人乙');
+    expect(JSON.stringify(response)).not.toContain('稀疏候选人');
     expect(JSON.stringify(response)).not.toContain('lib-resume-anonymous');
   });
 
@@ -349,6 +391,13 @@ describe('MAIN-world resume read handler', () => {
             resume_object: 'resumeInfo',
             allowed_keys: ['geekBaseInfo'],
             array_lengths: {},
+          },
+          profile: {
+            display_name: '候选人丙',
+            education: [],
+            work_experiences: [],
+            project_experiences: [],
+            skills: [],
           },
         },
       },

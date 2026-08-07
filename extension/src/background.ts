@@ -7,10 +7,11 @@ import type {
 } from './contracts';
 import { routeParserMessage, type ParserMessageSender } from './parser/router';
 import {
-  extractBossVueResumeCapability,
-  isVueResumeFrameProbe,
-  type VueResumeFrameProbe,
-} from './parser/vueResumeProbe';
+  extractBossVueResumeProfile,
+  isVueResumeProfileFrameProbe,
+  type VueResumeProfileFrameProbe,
+} from './parser/vueResumeMapper';
+import { buildProfileSnapshot } from './parser/snapshot';
 import { isRecord, isResumeReadRequest } from './validation';
 
 
@@ -26,7 +27,7 @@ interface ResumeScriptResult {
 type ResumeScriptExecutor = (details: {
   target: { tabId: number; allFrames: true };
   world: 'MAIN';
-  func: typeof extractBossVueResumeCapability;
+  func: typeof extractBossVueResumeProfile;
 }) => Promise<ResumeScriptResult[]>;
 
 type ResumeReader = (tabId: number) => Promise<ResumeReadResponse>;
@@ -103,14 +104,29 @@ const executeResumeScript: ResumeScriptExecutor = async (details) => (
 );
 
 
-function capabilityScore(probe: Extract<VueResumeFrameProbe, { status: 'ready' }>): number {
-  return probe.capability.allowed_keys.length * 100
-    + Object.values(probe.capability.array_lengths).reduce((total, count) => total + count, 0);
+function profileScore(
+  probe: Extract<VueResumeProfileFrameProbe, { status: 'ready' }>,
+): number {
+  const profile = probe.profile;
+  const scalarCount = [
+    profile.display_name,
+    profile.current_title,
+    profile.location,
+    profile.expected_position,
+    profile.expected_city,
+    profile.summary,
+    profile.experience_years,
+  ].filter((value) => value !== undefined).length;
+  return scalarCount
+    + (profile.work_experiences.length * 100)
+    + (profile.education.length * 100)
+    + (profile.project_experiences.length * 100)
+    + (profile.skills.length * 10);
 }
 
 
 function capabilitySnapshot(
-  probe: Extract<VueResumeFrameProbe, { status: 'ready' }>,
+  probe: Extract<VueResumeProfileFrameProbe, { status: 'ready' }>,
   capturedAt: string,
 ): ParserSnapshot {
   const { capability } = probe;
@@ -123,14 +139,14 @@ function capabilitySnapshot(
       .map(([key, length]) => `vue-capability:array=${key}:${length}`),
   ];
 
+  const snapshot = buildProfileSnapshot(
+    capability.root === 'lib-resume-recommend' ? 'recommend_frame' : 'resume_frame',
+    probe.profile,
+    new Date(capturedAt),
+  );
   return {
-    schema_version: 1,
+    ...snapshot,
     parser_version: 'boss-vue-v1',
-    page_kind: capability.root === 'lib-resume-recommend' ? 'recommend_frame' : 'resume_frame',
-    status: 'partial',
-    captured_at: capturedAt,
-    present_fields: [],
-    missing_fields: [],
     warnings,
   };
 }
@@ -145,21 +161,21 @@ export async function handleResumeRead(
     const results = await executor({
       target: { tabId, allFrames: true },
       world: 'MAIN',
-      func: extractBossVueResumeCapability,
+      func: extractBossVueResumeProfile,
     });
     const probes = results
       .map(({ result }) => result)
-      .filter(isVueResumeFrameProbe);
+      .filter(isVueResumeProfileFrameProbe);
 
     if (probes.length === 0) {
       return { ok: false, error: 'vue-result-invalid' };
     }
 
     const ready = probes
-      .filter((probe): probe is Extract<VueResumeFrameProbe, { status: 'ready' }> => (
+      .filter((probe): probe is Extract<VueResumeProfileFrameProbe, { status: 'ready' }> => (
         probe.status === 'ready'
       ))
-      .sort((left, right) => capabilityScore(right) - capabilityScore(left));
+      .sort((left, right) => profileScore(right) - profileScore(left));
 
     if (ready.length > 0) {
       if (ready[0].capability.allowed_keys.length === 0) {
