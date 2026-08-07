@@ -345,7 +345,7 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
   npm.cmd run test --workspace extension -- src/parser/client.test.ts src/components/PageReadingCard.test.tsx src/components/CopilotPanel.test.tsx --run
   ```
 
-- [ ] **Step 4：构建并刷新 Chrome 扩展**
+- [x] **Step 4：构建并刷新 Chrome 扩展**
 
   ```powershell
   npm.cmd run build:extension
@@ -353,13 +353,13 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 
   然后人工执行：Chrome 扩展页刷新扩展 → 刷新 BOSS 页面 → 用户手动打开一名候选人 → 点击一次“读取当前简历”。
 
-  2026-08-07 自动部分结果：扩展 18 个测试文件、206 个测试全部通过，TypeScript 类型检查通过，生产构建成功；人工刷新和真实页面单次点击尚未执行，因此本步骤保持未完成。
+  2026-08-07 结果：扩展 18 个测试文件、206 个测试全部通过，TypeScript 类型检查通过，生产构建成功；用户随后刷新扩展，在手动打开的候选人页面点击一次“读取当前简历”，能力探针成功。
 
-- [ ] **Step 5：只记录匿名能力结果**
+- [x] **Step 5：只记录匿名能力结果**
 
   在本文件记录：sample id、命中根、Vue 代际、`resumeInfo` 是否存在、允许键数量和数组长度；不记录任何值。
 
-- [ ] **Step 6：根据现场事实作单一决策**
+- [x] **Step 6：根据现场事实作单一决策**
 
   - 找到 `resumeInfo`：进入 Task 4；
   - 没找到：记录唯一失败码，停止 Vue 映射，不继续猜测全局变量，转入第 9 节 OCR 决策。
@@ -480,6 +480,7 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 | 日期 | sample id | 实验假设 | 用户动作 | 匿名观察 | 结果 | 唯一失败码 / 结论 |
 |---|---|---|---|---|---|---|
 | 2026-08-07 | `research-only` | 公开插件可能给出完整简历读取入口 | 未操作 BOSS；仅静态检查公开 ZIP | 发现 `.lib-resume-recommend → resumeInfo` 尝试及 OCR 主回退 | 研究通过 | 下一步验证当前 BOSS 版本是否暴露 Vue 数据 |
+| 2026-08-07 | `sample-01` | 可见 `.lib-resume-recommend` 在 MAIN world 暴露可用 `resumeInfo` | 用户刷新扩展、手动打开候选人并点击一次“读取当前简历” | 命中推荐简历根、Vue 2、`resumeInfo`；允许字段 4；工作数组 1、教育数组 2、项目数组 1 | 能力探针通过 | 进入 Task 4；未记录任何候选人字段值 |
 
 ## 9. OCR 兜底决策门槛
 
@@ -501,8 +502,6 @@ OCR 方案必须另行确认：
 
 ## 10. 当前下一步
 
-当前只执行 Task 1 至 Task 3，目标是用一次无正文泄漏的真实页面实验回答唯一问题：
+Task 3 的真实页面门槛已通过：当前 BOSS 页面中的可见 `.lib-resume-recommend` 在 MAIN world 暴露 Vue 2 `resumeInfo`。匿名样本显示允许字段 4 个，其中工作数组 1、教育数组 2、项目数组 1。
 
-> 当前 BOSS 页面中的可见 `.lib-resume-recommend` 是否在 MAIN world 暴露可用 `resumeInfo`？
-
-在得到这个事实前，不执行 Task 4，不实现 OCR，也不继续增加 DOM selector。
+当前进入 Task 4：只映射已经确认的 Vue 白名单结构为 `CandidateProfile`，先用匿名 fixture 完成测试，再由用户单次点击验证真实字段覆盖。OCR 仍不实施，也不继续增加 DOM selector。
