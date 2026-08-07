@@ -259,6 +259,11 @@ describe('MAIN-world resume read handler', () => {
           allowed_keys: ['geekBaseInfo', 'geekWorkExpList'],
           array_lengths: { geekWorkExpList: 2 },
         },
+        schema: [
+          { key: 'geekBaseInfo', type: 'object' },
+          { key: 'professionalSkillInfo', type: 'string' },
+          { key: 'unknownList', type: 'array', array_length: 50 },
+        ],
         profile: {
           display_name: '候选人甲',
           education: [],
@@ -316,6 +321,9 @@ describe('MAIN-world resume read handler', () => {
           'vue-capability:key=geekBaseInfo',
           'vue-capability:key=geekWorkExpList',
           'vue-capability:array=geekWorkExpList:2',
+          'vue-schema:key=geekBaseInfo:object',
+          'vue-schema:key=professionalSkillInfo:string',
+          'vue-schema:key=unknownList:array:50',
         ],
       },
     });
@@ -334,6 +342,7 @@ describe('MAIN-world resume read handler', () => {
             allowed_keys: ['geekBaseInfo', 'geekWorkExpList'],
             array_lengths: { geekWorkExpList: 1 },
           },
+          schema: [{ key: 'geekBaseInfo', type: 'object' }],
           profile: {
             display_name: '稀疏候选人',
             education: [],
@@ -354,6 +363,10 @@ describe('MAIN-world resume read handler', () => {
             allowed_keys: ['geekBaseInfo', 'geekWorkExpList'],
             array_lengths: { geekWorkExpList: 1 },
           },
+          schema: [
+            { key: 'geekBaseInfo', type: 'object' },
+            { key: 'geekWorkExpList', type: 'array', array_length: 1 },
+          ],
           profile: {
             display_name: '候选人乙',
             education: [{ school: '示例大学' }],
@@ -392,6 +405,7 @@ describe('MAIN-world resume read handler', () => {
             allowed_keys: ['geekBaseInfo'],
             array_lengths: {},
           },
+          schema: [{ key: 'geekBaseInfo', type: 'object' }],
           profile: {
             display_name: '候选人丙',
             education: [],

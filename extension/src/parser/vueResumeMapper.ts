@@ -14,7 +14,12 @@ import {
 
 
 export type VueResumeProfileFrameProbe =
-  | { status: 'ready'; capability: VueResumeCapability; profile: CandidateProfile }
+  | {
+      status: 'ready';
+      capability: VueResumeCapability;
+      profile: CandidateProfile;
+      schema: VueResumeSchemaField[];
+    }
   | { status: 'vue-root-not-found' }
   | { status: 'vue-instance-not-found'; root: VueResumeRoot }
   | {
@@ -22,6 +27,22 @@ export type VueResumeProfileFrameProbe =
       root: VueResumeRoot;
       vue_generation: VueGeneration;
     };
+
+export type VueResumeSchemaType =
+  | 'array'
+  | 'object'
+  | 'string'
+  | 'number'
+  | 'boolean'
+  | 'null'
+  | 'undefined'
+  | 'other';
+
+export interface VueResumeSchemaField {
+  key: string;
+  type: VueResumeSchemaType;
+  array_length?: number;
+}
 
 
 /**
@@ -43,6 +64,8 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
   ] as const;
   const maxElements = 500;
   const maxItems = 50;
+  const maxSchemaFields = 40;
+  const schemaKeyFormat = /^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/;
 
   const isRecord = (value: unknown): value is Record<string, unknown> => (
     typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -344,6 +367,61 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
     };
   };
 
+  const schemaFor = (resumeInfo: Record<string, unknown>): VueResumeSchemaField[] => {
+    let descriptors: Record<string, PropertyDescriptor>;
+    try {
+      descriptors = Object.getOwnPropertyDescriptors(resumeInfo);
+    } catch {
+      return [];
+    }
+
+    const schema: VueResumeSchemaField[] = [];
+    for (const key of Object.keys(descriptors)) {
+      if (schema.length >= maxSchemaFields) {
+        break;
+      }
+      const descriptor = descriptors[key];
+      if (!descriptor.enumerable || !schemaKeyFormat.test(key)) {
+        continue;
+      }
+      if (!Object.prototype.hasOwnProperty.call(descriptor, 'value')) {
+        schema.push({ key, type: 'other' });
+        continue;
+      }
+
+      const value = descriptor.value;
+      if (Array.isArray(value)) {
+        let arrayLength = 0;
+        try {
+          const length = Object.getOwnPropertyDescriptor(value, 'length')?.value;
+          if (Number.isInteger(length) && length >= 0) {
+            arrayLength = Math.min(length, maxItems);
+          }
+        } catch {
+          // Keep a safe zero length when a page-owned proxy blocks the descriptor.
+        }
+        schema.push({ key, type: 'array', array_length: arrayLength });
+        continue;
+      }
+      if (value === null) {
+        schema.push({ key, type: 'null' });
+        continue;
+      }
+
+      const valueType = typeof value;
+      if (valueType === 'object'
+        || valueType === 'string'
+        || valueType === 'number'
+        || valueType === 'boolean'
+        || valueType === 'undefined') {
+        schema.push({ key, type: valueType });
+      } else {
+        schema.push({ key, type: 'other' });
+      }
+    }
+    return schema;
+  };
+
   const profileScore = (profile: CandidateProfile): number => {
     const scalarCount = [
       profile.display_name,
@@ -379,6 +457,7 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
         status: 'ready',
         capability: capabilityFor(selectedRoot.root, handle.generation, resumeInfo),
         profile: mapProfile(resumeInfo),
+        schema: schemaFor(resumeInfo),
       });
     }
   }
@@ -408,14 +487,57 @@ function hasOnlyKeys(value: Record<string, unknown>, allowed: readonly string[])
 }
 
 
+const SCHEMA_TYPES: readonly VueResumeSchemaType[] = [
+  'array',
+  'object',
+  'string',
+  'number',
+  'boolean',
+  'null',
+  'undefined',
+  'other',
+];
+
+
+function isVueResumeSchema(value: unknown): value is VueResumeSchemaField[] {
+  if (!Array.isArray(value) || value.length > 40) {
+    return false;
+  }
+  const seen = new Set<string>();
+  for (const field of value) {
+    if (!isRecord(field)
+      || !hasOnlyKeys(field, ['key', 'type', 'array_length'])
+      || typeof field.key !== 'string'
+      || !/^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/.test(field.key)
+      || seen.has(field.key)
+      || typeof field.type !== 'string'
+      || !SCHEMA_TYPES.includes(field.type as VueResumeSchemaType)) {
+      return false;
+    }
+    seen.add(field.key);
+    if (field.type === 'array') {
+      if (!Number.isInteger(field.array_length)
+        || Number(field.array_length) < 0
+        || Number(field.array_length) > 50) {
+        return false;
+      }
+    } else if (field.array_length !== undefined) {
+      return false;
+    }
+  }
+  return true;
+}
+
+
 export function isVueResumeProfileFrameProbe(
   value: unknown,
 ): value is VueResumeProfileFrameProbe {
   if (!isRecord(value) || value.status !== 'ready') {
     return isVueResumeFrameProbe(value);
   }
-  if (!hasOnlyKeys(value, ['status', 'capability', 'profile'])
-    || !isVueResumeFrameProbe({ status: 'ready', capability: value.capability })) {
+  if (!hasOnlyKeys(value, ['status', 'capability', 'profile', 'schema'])
+    || !isVueResumeFrameProbe({ status: 'ready', capability: value.capability })
+    || !isVueResumeSchema(value.schema)) {
     return false;
   }
 

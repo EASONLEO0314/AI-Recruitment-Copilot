@@ -137,6 +137,11 @@ function capabilitySnapshot(
     ...capability.allowed_keys.map((key) => `vue-capability:key=${key}`),
     ...Object.entries(capability.array_lengths)
       .map(([key, length]) => `vue-capability:array=${key}:${length}`),
+    ...probe.schema.map(({ key, type, array_length: arrayLength }) => (
+      type === 'array'
+        ? `vue-schema:key=${key}:${type}:${arrayLength}`
+        : `vue-schema:key=${key}:${type}`
+    )),
   ];
 
   const snapshot = buildProfileSnapshot(

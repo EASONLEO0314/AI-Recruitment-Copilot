@@ -43,7 +43,7 @@ describe('MAIN-world Vue resume profile mapper', () => {
   });
 
   it('maps only confirmed BOSS paths into CandidateProfile', () => {
-    mountResume({
+    const resumeInfo: Record<string, unknown> = {
       geekBaseInfo: {
         name: ' 候选人甲 ',
         positionName: ' 平台工程师 ',
@@ -88,8 +88,23 @@ describe('MAIN-world Vue resume profile mapper', () => {
       }],
       geekDesc: ' 匿名自我描述 ',
       skillTagList: [{ name: 'TypeScript' }, 'Python', { name: 'TypeScript' }],
+      professionalSkillInfo: '不得读取技能内容',
+      unknownList: Array.from({ length: 55 }, () => '不得读取数组内容'),
       secretInternalState: { token: '不得读取' },
+    };
+    Object.defineProperty(resumeInfo, 'bad-key', {
+      enumerable: true,
+      value: '不得读取非法键内容',
     });
+    let accessorCalls = 0;
+    Object.defineProperty(resumeInfo, 'accessorField', {
+      enumerable: true,
+      get: () => {
+        accessorCalls += 1;
+        throw new Error('不得调用 getter');
+      },
+    });
+    mountResume(resumeInfo);
 
     const result = extractBossVueResumeProfile();
 
@@ -114,6 +129,12 @@ describe('MAIN-world Vue resume profile mapper', () => {
           skillTagList: 3,
         },
       },
+      schema: expect.arrayContaining([
+        { key: 'geekBaseInfo', type: 'object' },
+        { key: 'professionalSkillInfo', type: 'string' },
+        { key: 'unknownList', type: 'array', array_length: 50 },
+        { key: 'accessorField', type: 'other' },
+      ]),
       profile: {
         display_name: '候选人甲',
         current_title: '平台工程师',
@@ -155,14 +176,21 @@ describe('MAIN-world Vue resume profile mapper', () => {
         summary: '匿名自我描述',
       },
     });
-    const serialized = JSON.stringify(result);
-    expect(serialized).not.toContain('privatePhone');
-    expect(serialized).not.toContain('secretInternalState');
-    expect(serialized).not.toContain('不得读取');
+    expect(accessorCalls).toBe(0);
+    if (result.status !== 'ready') {
+      return;
+    }
+    const serializedProfile = JSON.stringify(result.profile);
+    const serializedSchema = JSON.stringify(result.schema);
+    expect(serializedProfile).not.toContain('privatePhone');
+    expect(serializedProfile).not.toContain('secretInternalState');
+    expect(serializedProfile).not.toContain('不得读取');
+    expect(serializedSchema).not.toContain('不得读取');
+    expect(serializedSchema).not.toContain('bad-key');
   });
 
   it('bounds arrays and every string before crossing the MAIN-world boundary', () => {
-    mountResume({
+    const resumeInfo: Record<string, unknown> = {
       geekBaseInfo: { name: '名'.repeat(170) },
       geekWorkExpList: Array.from({ length: 55 }, (_, index) => ({
         company: `示例公司${index}`,
@@ -170,7 +198,11 @@ describe('MAIN-world Vue resume profile mapper', () => {
       })),
       geekDesc: '述'.repeat(510),
       skillTagList: Array.from({ length: 55 }, (_, index) => `技能${index}`),
-    });
+    };
+    for (let index = 0; index < 45; index += 1) {
+      resumeInfo[`schemaField${index}`] = `不得读取${index}`;
+    }
+    mountResume(resumeInfo);
 
     const result = extractBossVueResumeProfile();
 
@@ -186,6 +218,8 @@ describe('MAIN-world Vue resume profile mapper', () => {
     expect(result.profile.skills).toHaveLength(50);
     expect(result.capability.array_lengths.geekWorkExpList).toBe(50);
     expect(result.capability.array_lengths.skillTagList).toBe(50);
+    expect(result.schema).toHaveLength(40);
+    expect(JSON.stringify(result.schema)).not.toContain('不得读取');
   });
 
   it('ignores hidden stale roots and selects the richest bounded profile', () => {
@@ -235,6 +269,14 @@ describe('MAIN-world Vue resume profile mapper', () => {
       geekWorkExpList: [],
     };
     resumeInfo.circular = resumeInfo;
+    let accessorCalls = 0;
+    Object.defineProperty(resumeInfo, 'accessorField', {
+      enumerable: true,
+      get: () => {
+        accessorCalls += 1;
+        throw new Error('top-level getter detail');
+      },
+    });
     Object.defineProperty(resumeInfo.geekBaseInfo, 'privateValue', {
       get: () => { throw new Error('private getter detail'); },
     });
@@ -244,6 +286,10 @@ describe('MAIN-world Vue resume profile mapper', () => {
     const result = extractBossVueResumeProfile();
     expect(result).toMatchObject({
       status: 'ready',
+      schema: expect.arrayContaining([
+        { key: 'circular', type: 'object' },
+        { key: 'accessorField', type: 'other' },
+      ]),
       profile: {
         display_name: '候选人丙',
         work_experiences: [],
@@ -252,7 +298,9 @@ describe('MAIN-world Vue resume profile mapper', () => {
         skills: [],
       },
     });
+    expect(accessorCalls).toBe(0);
     expect(JSON.stringify(result)).not.toContain('private getter detail');
+    expect(JSON.stringify(result)).not.toContain('top-level getter detail');
   });
 });
 
@@ -268,6 +316,7 @@ describe('Vue resume profile probe validation', () => {
         allowed_keys: ['geekBaseInfo'],
         array_lengths: {},
       },
+      schema: [{ key: 'geekBaseInfo', type: 'object' }],
       profile: {
         display_name: '候选人甲',
         education: [],
@@ -281,6 +330,21 @@ describe('Vue resume profile probe validation', () => {
     expect(isVueResumeProfileFrameProbe({
       ...valid,
       profile: { ...valid.profile, privateToken: 'forbidden' },
+    })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      schema: [{ key: 'privateField', type: 'private-type' }],
+    })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      schema: [{ key: 'privateField', type: 'string', array_length: 1 }],
+    })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      schema: [
+        { key: 'duplicate', type: 'string' },
+        { key: 'duplicate', type: 'string' },
+      ],
     })).toBe(false);
   });
 });

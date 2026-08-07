@@ -283,7 +283,7 @@ describe('PageReadingCard', () => {
     expect(screen.getByRole('button', { name: '正在读取简历' })).toBeDisabled();
   });
 
-  it('shows only fixed Vue capability metadata and array counts', () => {
+  it('shows only safe Vue capability and top-level schema metadata', () => {
     const resumeSnapshot: ParserSnapshot = {
       schema_version: 1,
       parser_version: 'boss-vue-v1',
@@ -299,6 +299,10 @@ describe('PageReadingCard', () => {
         'vue-capability:key=geekBaseInfo',
         'vue-capability:key=geekWorkExpList',
         'vue-capability:array=geekWorkExpList:3',
+        'vue-schema:key=professionalSkillInfo:string',
+        'vue-schema:key=unknownList:array:3',
+        'vue-schema:key=bad-key:string',
+        'vue-schema:key=privateValue:string:候选人值',
         'private-candidate-value',
       ],
     };
@@ -319,6 +323,11 @@ describe('PageReadingCard', () => {
     expect(screen.getByText('Vue 2')).toBeInTheDocument();
     expect(screen.getByText('允许字段 2')).toBeInTheDocument();
     expect(screen.getByText('工作经历 3')).toBeInTheDocument();
+    expect(screen.getByText('resumeInfo 顶层字段（仅结构）')).toBeInTheDocument();
+    expect(screen.getByText('professionalSkillInfo · 字符串')).toBeInTheDocument();
+    expect(screen.getByText('unknownList · 数组 3')).toBeInTheDocument();
+    expect(screen.queryByText(/bad-key/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/候选人值/)).not.toBeInTheDocument();
     expect(screen.queryByText('private-candidate-value')).not.toBeInTheDocument();
   });
 

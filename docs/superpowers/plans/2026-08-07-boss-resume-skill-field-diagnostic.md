@@ -18,7 +18,7 @@
 - Modify: `extension/src/background.ts`
 - Modify: `extension/src/background.test.ts`
 
-- [ ] **Step 1：先写失败测试**
+- [x] **Step 1：先写失败测试**
 
 在 mapper fixture 中加入普通字段、长度超过 50 的数组、非法键名和会抛错的 getter，期望结果包含：
 
@@ -38,7 +38,7 @@ schema: [
 'vue-schema:key=unknownList:array:50'
 ```
 
-- [ ] **Step 2：运行测试确认 RED**
+- [x] **Step 2：运行测试确认 RED**
 
 Run:
 
@@ -48,7 +48,7 @@ npm.cmd run test --workspace extension -- src/parser/vueResumeMapper.test.ts src
 
 Expected: FAIL，原因是 ready probe 尚无 `schema`，后台尚未输出 `vue-schema` warning。
 
-- [ ] **Step 3：最小实现 schema 生成与校验**
+- [x] **Step 3：最小实现 schema 生成与校验**
 
 新增固定类型：
 
@@ -68,7 +68,9 @@ interface VueResumeSchemaField {
 
 后台只把已经校验的 schema 转成 `vue-schema:key=<key>:<type>[:<length>]` warning。
 
-- [ ] **Step 4：运行聚焦测试确认 GREEN**
+- [x] **Step 4：运行聚焦测试确认 GREEN**
+
+实际结果：RED 阶段 7 项按预期失败；GREEN 阶段 2 个测试文件、26 项测试通过，类型检查 exit code 0。
 
 Run:
 
@@ -85,7 +87,7 @@ Expected: 两个测试文件全部通过，类型检查 exit code 0。
 - Modify: `extension/src/components/PageReadingCard.tsx`
 - Modify: `extension/src/components/PageReadingCard.test.tsx`
 
-- [ ] **Step 1：先写失败的界面测试**
+- [x] **Step 1：先写失败的界面测试**
 
 给能力 snapshot 增加：
 
@@ -100,7 +102,7 @@ warnings: [
 
 期望只显示 `professionalSkillInfo · 字符串` 和 `unknownList · 数组 3`；非法 warning 与候选人值不显示。
 
-- [ ] **Step 2：运行测试确认 RED**
+- [x] **Step 2：运行测试确认 RED**
 
 Run:
 
@@ -110,7 +112,7 @@ npm.cmd run test --workspace extension -- src/components/PageReadingCard.test.ts
 
 Expected: FAIL，原因是 schema 区域尚未渲染。
 
-- [ ] **Step 3：最小实现安全解析和展示**
+- [x] **Step 3：最小实现安全解析和展示**
 
 只接受以下正则匹配的 warning：
 
@@ -120,7 +122,9 @@ Expected: FAIL，原因是 schema 区域尚未渲染。
 
 数组必须带长度，非数组不得带长度；最多显示 40 项。固定中文类型标签为“数组、对象、字符串、数字、布尔、空值、未定义、其他”。
 
-- [ ] **Step 4：运行测试确认 GREEN**
+- [x] **Step 4：运行测试确认 GREEN**
+
+实际结果：RED 阶段 1 项按预期失败；GREEN 阶段 1 个测试文件、20 项测试通过，类型检查 exit code 0。
 
 Run:
 
@@ -137,12 +141,18 @@ Expected: 测试与类型检查 exit code 0。
 - Modify: `docs/superpowers/plans/2026-08-07-boss-resume-reading-record.md`
 - Modify: `docs/validation/m2-loop-log.md`
 - Modify: `docs/superpowers/plans/2026-08-07-boss-resume-skill-field-diagnostic.md`
+- Modify: `extension/src/validation.ts`
+- Modify: `extension/src/validation.test.ts`
 
-- [ ] **Step 1：记录唯一问题与安全决策**
+- [x] **Step 1：记录唯一问题与安全决策**
 
 记录问题指纹 `skill-present-but-skillTagList-absent`、参考插件只支持 `skillTagList` 的静态证据，以及本轮仅增加 schema 诊断、尚未正式映射技能的边界。
 
-- [ ] **Step 2：运行安全扫描与完整验证**
+代码审查新增并修复问题指纹 `schema-warning-budget-overflow`：最坏情况下 3 条固定能力信息、6 个允许字段、4 个数组长度和 40 个 schema 字段合计 53 条，超过旧的 40 条 warning 校验上限。先以失败测试复现 53 条 Vue 结果被拒绝，再把上限仅对 `boss-vue-v1` 调整为 64；`boss-dom-v1` 仍保持 40，65 条仍拒绝。
+
+- [x] **Step 2：运行安全扫描与完整验证**
+
+实际结果：安全扫描无匹配；`npm.cmd run verify` exit code 0，后端 12 项、扩展 19 个测试文件 218 项全部通过，类型检查与 content/background 构建通过。
 
 Run:
 
@@ -153,10 +163,10 @@ npm.cmd run verify
 
 Expected: 新 schema 路径没有自动行为、存储或网络调用；标准验证 exit code 0。
 
-- [ ] **Step 3：提交**
+- [x] **Step 3：提交**
 
 ```powershell
-git add docs/superpowers/plans/2026-08-07-boss-resume-skill-field-diagnostic.md docs/superpowers/plans/2026-08-07-boss-resume-reading-record.md docs/validation/m2-loop-log.md extension/src/parser/vueResumeMapper.ts extension/src/parser/vueResumeMapper.test.ts extension/src/background.ts extension/src/background.test.ts extension/src/components/PageReadingCard.tsx extension/src/components/PageReadingCard.test.tsx
+git add docs/superpowers/plans/2026-08-07-boss-resume-skill-field-diagnostic.md docs/superpowers/plans/2026-08-07-boss-resume-reading-record.md docs/validation/m2-loop-log.md extension/src/parser/vueResumeMapper.ts extension/src/parser/vueResumeMapper.test.ts extension/src/background.ts extension/src/background.test.ts extension/src/components/PageReadingCard.tsx extension/src/components/PageReadingCard.test.tsx extension/src/validation.ts extension/src/validation.test.ts
 git commit -m "feat: diagnose BOSS resume skill schema safely"
 ```
 

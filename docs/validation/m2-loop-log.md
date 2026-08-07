@@ -158,11 +158,11 @@ npm.cmd run verify
 
 ## 登录后人工解析验收
 
-执行状态：未执行。
+执行状态：进行中，尚未达到完成门槛。
 
-- 样本数：0。
+- 匿名授权样本数：1。
 - 准确率：未计算。
-- 尚无 `work_experience`、`education`、`projects`、`skills` 或 `experience_years` 的字段级 pass / partial / fail / not_present 记录。
+- 当前只完成 `skills=fail` 的人工对比：BOSS 页面可见“专业技能”，读取结果显示缺少技能。工作、教育、项目和工作年限尚未逐字段确认，不记为通过或失败。
 - 尚无自动操作、自动刷新或 stale candidate 的人工观察结果。
 
 未来计算口径（尚未应用于任何样本）：numerator 只统计 `pass`；`partial` 和 `fail` 属于 present、保留在 denominator 但不计 correct；`not_present` 排除 denominator。denominator 只汇总至少 5 个样本中每页实际 present 的五个 core fields。若 total present core fields 为 `0`，不得计算准确率，也不得判定通过。
@@ -208,6 +208,17 @@ npm.cmd run verify
 - 在可访问本机 Python 3.14 的终端重新执行同一标准命令，exit code 0：backend 12 passed；extension 19 个 test files、217 tests passed；`tsc --noEmit` exit 0；content/background production build exit 0。
 - 本轮安全扫描未发现新增的自动点击、聚焦、滚动、BOSS 网络请求、浏览器存储、Cookie 或 debugger 使用。
 - 尚未完成 5 个授权匿名样本的字段级人工验收，因此暂不计算准确率，也不宣布 Vue 读取阶段最终通过。
+
+### 技能缺失诊断
+
+- 唯一问题指纹：`skill-present-but-skillTagList-absent`。
+- 匿名样本的读取结果为工作 1、教育 2、项目 4、技能缺失；用户对比确认 BOSS 页面存在“专业技能”正文。
+- 现有能力结果只命中 4 个字段，数组仅为工作、教育、项目，未命中 `skillTagList`。
+- 重新静态检查公开参考插件离线包，SHA-256 仍为 `AF2727353265B68EAA6AACBD4F2E8B80A08488562C46656CE4C42832AF5A4548`；其技能路径同样只有 `skillTagList`，因此不能直接复用来修复该样本。临时下载与解压文件已删除。
+- 本轮只增加由用户点击触发的 `resumeInfo` 顶层 schema 诊断：最多 40 个安全键名、固定类型和最大 50 的数组长度；不返回任何值，不持久化，不新增自动操作。
+- 代码审查发现 `schema-warning-budget-overflow`：完整 schema 诊断最多产生 53 条 warning，旧校验上限 40 会使客户端安全丢弃整个读取结果。失败测试确认该问题后，将上限仅对 `boss-vue-v1` 调整为 64；DOM 快照仍为 40，65 条 Vue warning 仍被拒绝。
+- 完整验证：`npm.cmd run verify` exit code 0；后端 12 项、扩展 19 个测试文件 218 项通过，类型检查与两种扩展构建通过。安全扫描未匹配自动点击、聚焦、滚动、BOSS 网络请求、浏览器存储、Cookie 或 debugger 使用。
+- 在真实 schema 证据返回之前，不猜测技能字段名，也不宣布技能问题已经修复。
 
 ## 未登录公开职位临时探针（已中止）
 

@@ -143,6 +143,8 @@ const PAGE_KINDS = [
 
 const PARSER_STATUSES = ['waiting', 'ready', 'partial', 'unsupported', 'error'] as const;
 const PARSER_VERSIONS = ['boss-dom-v1', 'boss-vue-v1'] as const;
+const DOM_WARNING_MAX_ITEMS = 40;
+const VUE_WARNING_MAX_ITEMS = 64;
 
 
 function isEducationExperience(value: unknown): boolean {
@@ -211,6 +213,9 @@ export function isParserSnapshot(value: unknown): value is ParserSnapshot {
   if (!isRecord(value) || !hasOnlyKeys(value, SNAPSHOT_KEYS)) {
     return false;
   }
+  const warningMaxItems = value.parser_version === 'boss-vue-v1'
+    ? VUE_WARNING_MAX_ITEMS
+    : DOM_WARNING_MAX_ITEMS;
 
   return value.schema_version === 1
     && PARSER_VERSIONS.includes(value.parser_version as typeof PARSER_VERSIONS[number])
@@ -222,7 +227,7 @@ export function isParserSnapshot(value: unknown): value is ParserSnapshot {
     && (!('profile' in value) || isCandidateProfile(value.profile))
     && isBoundedStringArray(value.present_fields, 50)
     && isBoundedStringArray(value.missing_fields, 50)
-    && isBoundedStringArray(value.warnings, 40);
+    && isBoundedStringArray(value.warnings, warningMaxItems);
 }
 
 

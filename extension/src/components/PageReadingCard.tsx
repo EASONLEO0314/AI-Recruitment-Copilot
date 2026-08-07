@@ -105,6 +105,19 @@ const VUE_ARRAY_LABELS: Readonly<Record<string, string>> = {
   skillTagList: '技能标签',
 };
 
+const VUE_SCHEMA_WARNING = /^vue-schema:key=([A-Za-z_$][A-Za-z0-9_$]{0,63}):(array|object|string|number|boolean|null|undefined|other)(?::([0-9]|[1-4][0-9]|50))?$/;
+
+const VUE_SCHEMA_TYPE_LABELS: Readonly<Record<string, string>> = {
+  array: '数组',
+  object: '对象',
+  string: '字符串',
+  number: '数字',
+  boolean: '布尔',
+  null: '空值',
+  undefined: '未定义',
+  other: '其他',
+};
+
 
 function structureNodeLabel(value: string): string | undefined {
   const tokens = value.split('+');
@@ -435,6 +448,25 @@ function ResumeCapabilityStatus({
     }
     return [{ key: match[1], label: VUE_ARRAY_LABELS[match[1]], count: Number(match[2]) }];
   });
+  const seenSchemaKeys = new Set<string>();
+  const schema = snapshot.warnings.flatMap((warning) => {
+    const match = warning.match(VUE_SCHEMA_WARNING);
+    if (!match || seenSchemaKeys.has(match[1])) {
+      return [];
+    }
+    const type = match[2];
+    const arrayLength = match[3] === undefined ? undefined : Number(match[3]);
+    if ((type === 'array' && arrayLength === undefined)
+      || (type !== 'array' && arrayLength !== undefined)) {
+      return [];
+    }
+    seenSchemaKeys.add(match[1]);
+    return [{
+      key: match[1],
+      label: VUE_SCHEMA_TYPE_LABELS[type],
+      arrayLength,
+    }];
+  }).slice(0, 40);
 
   if (snapshot.parser_version !== 'boss-vue-v1' || !root || !generation || !hasResumeInfo) {
     return <strong>页面读取结果无效，已安全丢弃</strong>;
@@ -452,6 +484,16 @@ function ResumeCapabilityStatus({
       {arrays.length > 0 && (
         <div className="arc-reading__facts" aria-label="Vue 简历数组条目数量">
           {arrays.map(({ key, label, count }) => <span key={key}>{label} {count}</span>)}
+        </div>
+      )}
+      {schema.length > 0 && (
+        <div className="arc-reading__topology" aria-label="Vue resumeInfo 顶层 schema">
+          <strong>resumeInfo 顶层字段（仅结构）</strong>
+          {schema.map(({ key, label, arrayLength }) => (
+            <span key={key}>
+              {key} · {label}{arrayLength === undefined ? '' : ` ${arrayLength}`}
+            </span>
+          ))}
         </div>
       )}
       <small>仅显示字段名和数量，不包含候选人正文</small>
