@@ -303,6 +303,11 @@ describe('PageReadingCard', () => {
         'vue-schema:key=unknownList:array:3',
         'vue-schema:key=bad-key:string',
         'vue-schema:key=privateValue:string:候选人值',
+        'vue-nested-schema:container=geekDetailInfo:key=professionalSkill:string',
+        'vue-nested-schema:container=geekDetailInfo:key=skillItems:array:3',
+        'vue-nested-schema:container=geekQuestInfoVO:key=privateValue:string',
+        'vue-nested-schema:container=geekDetailInfo:key=bad-key:string',
+        'vue-nested-schema:container=geekDetailInfo:key=privateValue:string:候选人值',
         'private-candidate-value',
       ],
     };
@@ -326,6 +331,10 @@ describe('PageReadingCard', () => {
     expect(screen.getByText('resumeInfo 顶层字段（仅结构）')).toBeInTheDocument();
     expect(screen.getByText('professionalSkillInfo · 字符串')).toBeInTheDocument();
     expect(screen.getByText('unknownList · 数组 3')).toBeInTheDocument();
+    expect(screen.getByText('geekDetailInfo 下一层字段（仅结构）')).toBeInTheDocument();
+    expect(screen.getByText('professionalSkill · 字符串')).toBeInTheDocument();
+    expect(screen.getByText('skillItems · 数组 3')).toBeInTheDocument();
+    expect(screen.queryByText(/geekQuestInfoVO/)).not.toBeInTheDocument();
     expect(screen.queryByText(/bad-key/)).not.toBeInTheDocument();
     expect(screen.queryByText(/候选人值/)).not.toBeInTheDocument();
     expect(screen.queryByText('private-candidate-value')).not.toBeInTheDocument();
