@@ -43,6 +43,18 @@ describe('MAIN-world Vue resume profile mapper', () => {
   });
 
   it('maps only confirmed BOSS paths into CandidateProfile', () => {
+    const geekDetailInfo: Record<string, unknown> = {
+      professionalSkill: '不得读取技能正文',
+      skillItems: Array.from({ length: 55 }, () => '不得读取数组元素'),
+    };
+    let childAccessorCalls = 0;
+    Object.defineProperty(geekDetailInfo, 'childAccessor', {
+      enumerable: true,
+      get: () => {
+        childAccessorCalls += 1;
+        throw new Error('不得调用子字段 getter');
+      },
+    });
     const resumeInfo: Record<string, unknown> = {
       geekBaseInfo: {
         name: ' 候选人甲 ',
@@ -92,6 +104,22 @@ describe('MAIN-world Vue resume profile mapper', () => {
       unknownList: Array.from({ length: 55 }, () => '不得读取数组内容'),
       secretInternalState: { token: '不得读取' },
     };
+    let detailAccessorCalls = 0;
+    Object.defineProperty(resumeInfo, 'geekDetailInfo', {
+      enumerable: true,
+      get: () => {
+        detailAccessorCalls += 1;
+        return geekDetailInfo;
+      },
+    });
+    let otherContainerCalls = 0;
+    Object.defineProperty(resumeInfo, 'geekQuestInfoVO', {
+      enumerable: true,
+      get: () => {
+        otherContainerCalls += 1;
+        return { privateCandidateValue: '不得读取' };
+      },
+    });
     Object.defineProperty(resumeInfo, 'bad-key', {
       enumerable: true,
       value: '不得读取非法键内容',
@@ -135,6 +163,24 @@ describe('MAIN-world Vue resume profile mapper', () => {
         { key: 'unknownList', type: 'array', array_length: 50 },
         { key: 'accessorField', type: 'other' },
       ]),
+      nested_schema: expect.arrayContaining([
+        {
+          container: 'geekDetailInfo',
+          key: 'professionalSkill',
+          type: 'string',
+        },
+        {
+          container: 'geekDetailInfo',
+          key: 'skillItems',
+          type: 'array',
+          array_length: 50,
+        },
+        {
+          container: 'geekDetailInfo',
+          key: 'childAccessor',
+          type: 'other',
+        },
+      ]),
       profile: {
         display_name: '候选人甲',
         current_title: '平台工程师',
@@ -177,16 +223,21 @@ describe('MAIN-world Vue resume profile mapper', () => {
       },
     });
     expect(accessorCalls).toBe(0);
+    expect(detailAccessorCalls).toBe(1);
+    expect(childAccessorCalls).toBe(0);
+    expect(otherContainerCalls).toBe(0);
     if (result.status !== 'ready') {
       return;
     }
     const serializedProfile = JSON.stringify(result.profile);
     const serializedSchema = JSON.stringify(result.schema);
+    const serializedNestedSchema = JSON.stringify(result.nested_schema);
     expect(serializedProfile).not.toContain('privatePhone');
     expect(serializedProfile).not.toContain('secretInternalState');
     expect(serializedProfile).not.toContain('不得读取');
     expect(serializedSchema).not.toContain('不得读取');
     expect(serializedSchema).not.toContain('bad-key');
+    expect(serializedNestedSchema).not.toContain('不得读取');
   });
 
   it('bounds arrays and every string before crossing the MAIN-world boundary', () => {
@@ -198,6 +249,12 @@ describe('MAIN-world Vue resume profile mapper', () => {
       })),
       geekDesc: '述'.repeat(510),
       skillTagList: Array.from({ length: 55 }, (_, index) => `技能${index}`),
+      geekDetailInfo: Object.fromEntries(
+        Array.from({ length: 45 }, (_, index) => [
+          `nestedSchemaField${index}`,
+          `不得读取嵌套值${index}`,
+        ]),
+      ),
     };
     for (let index = 0; index < 45; index += 1) {
       resumeInfo[`schemaField${index}`] = `不得读取${index}`;
@@ -219,7 +276,9 @@ describe('MAIN-world Vue resume profile mapper', () => {
     expect(result.capability.array_lengths.geekWorkExpList).toBe(50);
     expect(result.capability.array_lengths.skillTagList).toBe(50);
     expect(result.schema).toHaveLength(40);
+    expect(result.nested_schema).toHaveLength(40);
     expect(JSON.stringify(result.schema)).not.toContain('不得读取');
+    expect(JSON.stringify(result.nested_schema)).not.toContain('不得读取');
   });
 
   it('ignores hidden stale roots and selects the richest bounded profile', () => {
@@ -317,6 +376,7 @@ describe('Vue resume profile probe validation', () => {
         array_lengths: {},
       },
       schema: [{ key: 'geekBaseInfo', type: 'object' }],
+      nested_schema: [],
       profile: {
         display_name: '候选人甲',
         education: [],
@@ -346,5 +406,76 @@ describe('Vue resume profile probe validation', () => {
         { key: 'duplicate', type: 'string' },
       ],
     })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      nested_schema: [{
+        container: 'geekQuestInfoVO',
+        key: 'privateField',
+        type: 'string',
+      }],
+    })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      nested_schema: [
+        { container: 'geekDetailInfo', key: 'duplicate', type: 'string' },
+        { container: 'geekDetailInfo', key: 'duplicate', type: 'string' },
+      ],
+    })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      nested_schema: [{
+        container: 'geekDetailInfo',
+        key: 'bad-key',
+        type: 'string',
+      }],
+    })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      nested_schema: [{
+        container: 'geekDetailInfo',
+        key: 'privateField',
+        type: 'private-type',
+      }],
+    })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      nested_schema: [{
+        container: 'geekDetailInfo',
+        key: 'privateList',
+        type: 'array',
+      }],
+    })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      nested_schema: [{
+        container: 'geekDetailInfo',
+        key: 'privateField',
+        type: 'string',
+        array_length: 1,
+      }],
+    })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      nested_schema: Array.from({ length: 41 }, (_, index) => ({
+        container: 'geekDetailInfo',
+        key: `field${index}`,
+        type: 'string',
+      })),
+    })).toBe(false);
+    const unsafeKey = {
+      toString: () => {
+        throw new Error('不得调用不可信 key 的 toString');
+      },
+    };
+    const unsafeKeyProbe = {
+      ...valid,
+      nested_schema: [{
+        container: 'geekDetailInfo',
+        key: unsafeKey,
+        type: 'string',
+      }],
+    };
+    expect(() => isVueResumeProfileFrameProbe(unsafeKeyProbe)).not.toThrow();
+    expect(isVueResumeProfileFrameProbe(unsafeKeyProbe)).toBe(false);
   });
 });

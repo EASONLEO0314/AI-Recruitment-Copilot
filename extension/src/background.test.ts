@@ -264,6 +264,7 @@ describe('MAIN-world resume read handler', () => {
           { key: 'professionalSkillInfo', type: 'string' },
           { key: 'unknownList', type: 'array', array_length: 50 },
         ],
+        nested_schema: [],
         profile: {
           display_name: '候选人甲',
           education: [],
@@ -343,6 +344,7 @@ describe('MAIN-world resume read handler', () => {
             array_lengths: { geekWorkExpList: 1 },
           },
           schema: [{ key: 'geekBaseInfo', type: 'object' }],
+          nested_schema: [],
           profile: {
             display_name: '稀疏候选人',
             education: [],
@@ -367,6 +369,7 @@ describe('MAIN-world resume read handler', () => {
             { key: 'geekBaseInfo', type: 'object' },
             { key: 'geekWorkExpList', type: 'array', array_length: 1 },
           ],
+          nested_schema: [],
           profile: {
             display_name: '候选人乙',
             education: [{ school: '示例大学' }],
@@ -406,6 +409,7 @@ describe('MAIN-world resume read handler', () => {
             array_lengths: {},
           },
           schema: [{ key: 'geekBaseInfo', type: 'object' }],
+          nested_schema: [],
           profile: {
             display_name: '候选人丙',
             education: [],

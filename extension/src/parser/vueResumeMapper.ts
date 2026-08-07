@@ -19,6 +19,7 @@ export type VueResumeProfileFrameProbe =
       capability: VueResumeCapability;
       profile: CandidateProfile;
       schema: VueResumeSchemaField[];
+      nested_schema: VueResumeNestedSchemaField[];
     }
   | { status: 'vue-root-not-found' }
   | { status: 'vue-instance-not-found'; root: VueResumeRoot }
@@ -42,6 +43,10 @@ export interface VueResumeSchemaField {
   key: string;
   type: VueResumeSchemaType;
   array_length?: number;
+}
+
+export interface VueResumeNestedSchemaField extends VueResumeSchemaField {
+  container: 'geekDetailInfo';
 }
 
 
@@ -367,10 +372,10 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
     };
   };
 
-  const schemaFor = (resumeInfo: Record<string, unknown>): VueResumeSchemaField[] => {
+  const schemaForRecord = (record: Record<string, unknown>): VueResumeSchemaField[] => {
     let descriptors: Record<string, PropertyDescriptor>;
     try {
-      descriptors = Object.getOwnPropertyDescriptors(resumeInfo);
+      descriptors = Object.getOwnPropertyDescriptors(record);
     } catch {
       return [];
     }
@@ -422,6 +427,19 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
     return schema;
   };
 
+  const nestedSchemaFor = (
+    resumeInfo: Record<string, unknown>,
+  ): VueResumeNestedSchemaField[] => {
+    const detail = safeRead(resumeInfo, 'geekDetailInfo');
+    if (!isRecord(detail)) {
+      return [];
+    }
+    return schemaForRecord(detail).map((field) => ({
+      container: 'geekDetailInfo',
+      ...field,
+    }));
+  };
+
   const profileScore = (profile: CandidateProfile): number => {
     const scalarCount = [
       profile.display_name,
@@ -457,7 +475,8 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
         status: 'ready',
         capability: capabilityFor(selectedRoot.root, handle.generation, resumeInfo),
         profile: mapProfile(resumeInfo),
-        schema: schemaFor(resumeInfo),
+        schema: schemaForRecord(resumeInfo),
+        nested_schema: nestedSchemaFor(resumeInfo),
       });
     }
   }
@@ -529,15 +548,43 @@ function isVueResumeSchema(value: unknown): value is VueResumeSchemaField[] {
 }
 
 
+function isVueResumeNestedSchema(value: unknown): value is VueResumeNestedSchemaField[] {
+  if (!Array.isArray(value) || value.length > 40) {
+    return false;
+  }
+  const seen = new Set<string>();
+  for (const field of value) {
+    if (!isRecord(field)
+      || !hasOnlyKeys(field, ['container', 'key', 'type', 'array_length'])
+      || field.container !== 'geekDetailInfo'
+      || typeof field.key !== 'string'
+      || seen.has(field.key)) {
+      return false;
+    }
+    const schemaField = {
+      key: field.key,
+      type: field.type,
+      ...(field.array_length === undefined ? {} : { array_length: field.array_length }),
+    };
+    if (!isVueResumeSchema([schemaField])) {
+      return false;
+    }
+    seen.add(field.key);
+  }
+  return true;
+}
+
+
 export function isVueResumeProfileFrameProbe(
   value: unknown,
 ): value is VueResumeProfileFrameProbe {
   if (!isRecord(value) || value.status !== 'ready') {
     return isVueResumeFrameProbe(value);
   }
-  if (!hasOnlyKeys(value, ['status', 'capability', 'profile', 'schema'])
+  if (!hasOnlyKeys(value, ['status', 'capability', 'profile', 'schema', 'nested_schema'])
     || !isVueResumeFrameProbe({ status: 'ready', capability: value.capability })
-    || !isVueResumeSchema(value.schema)) {
+    || !isVueResumeSchema(value.schema)
+    || !isVueResumeNestedSchema(value.nested_schema)) {
     return false;
   }
 
