@@ -1,4 +1,9 @@
-import type { PageKind, ParserSnapshot, ParserStatus } from '../contracts';
+import type {
+  PageKind,
+  ParserSnapshot,
+  ParserStatus,
+  ResumeReadErrorCode,
+} from '../contracts';
 import type { ParserSelectionReason } from '../parser/client';
 
 
@@ -17,6 +22,10 @@ interface PageReadingCardProps {
   selectionReason?: ParserSelectionReason;
   onRefresh: () => void;
   refreshing: boolean;
+  onReadResume?: () => void;
+  resumeReading?: boolean;
+  resumeSnapshot?: ParserSnapshot | null;
+  resumeReadError?: ResumeReadErrorCode | null;
 }
 
 
@@ -70,6 +79,31 @@ const HEADING_LABELS = {
   education: '教育',
   project: '项目',
 } as const;
+
+const RESUME_READ_ERROR_LABELS: Readonly<Record<ResumeReadErrorCode, string>> = {
+  'vue-root-not-found': '未找到当前简历，请先手动打开候选人简历',
+  'vue-instance-not-found': '当前页面未暴露可读取的简历数据',
+  'vue-resume-data-unavailable': '未获取到完整简历，可稍后评估 OCR 方案',
+  'vue-schema-unsupported': '检测到新的简历结构，暂未适配',
+  'vue-result-invalid': '页面读取结果无效，已安全丢弃',
+  'vue-read-failed': '简历读取失败，可手动重试',
+};
+
+const VUE_CAPABILITY_KEYS = [
+  'geekBaseInfo',
+  'geekWorkExpList',
+  'geekProjExpList',
+  'geekEduExpList',
+  'geekDesc',
+  'skillTagList',
+] as const;
+
+const VUE_ARRAY_LABELS: Readonly<Record<string, string>> = {
+  geekWorkExpList: '工作经历',
+  geekProjExpList: '项目经历',
+  geekEduExpList: '教育经历',
+  skillTagList: '技能标签',
+};
 
 
 function structureNodeLabel(value: string): string | undefined {
@@ -352,6 +386,76 @@ function ReadingStatus({ snapshot }: { snapshot: ParserSnapshot | null }) {
 }
 
 
+function ResumeCapabilityStatus({
+  reading,
+  snapshot,
+  error,
+}: {
+  reading: boolean;
+  snapshot: ParserSnapshot | null;
+  error: ResumeReadErrorCode | null;
+}) {
+  if (reading) {
+    return <strong>正在读取当前简历能力</strong>;
+  }
+  if (error) {
+    return <strong>{RESUME_READ_ERROR_LABELS[error]}</strong>;
+  }
+  if (!snapshot) {
+    return <small>完整简历仅在点击后读取，不会自动操作页面</small>;
+  }
+
+  const root = snapshot.warnings.includes('vue-capability:root=lib-resume-recommend')
+    ? '推荐简历根'
+    : snapshot.warnings.includes('vue-capability:root=lib-resume-anonymous')
+      ? '匿名简历根'
+      : undefined;
+  const generation = snapshot.warnings.includes('vue-capability:generation=vue2')
+    ? 'Vue 2'
+    : snapshot.warnings.includes('vue-capability:generation=vue3')
+      ? 'Vue 3'
+      : undefined;
+  const hasResumeInfo = snapshot.warnings.includes('vue-capability:resume-object=resumeInfo');
+  const keySet = new Set<string>();
+  for (const key of VUE_CAPABILITY_KEYS) {
+    if (snapshot.warnings.includes(`vue-capability:key=${key}`)) {
+      keySet.add(key);
+    }
+  }
+  const arrays = snapshot.warnings.flatMap((warning) => {
+    const match = warning.match(
+      /^vue-capability:array=(geekWorkExpList|geekProjExpList|geekEduExpList|skillTagList):([0-9]|[1-4][0-9]|50)$/,
+    );
+    if (!match || !keySet.has(match[1])) {
+      return [];
+    }
+    return [{ key: match[1], label: VUE_ARRAY_LABELS[match[1]], count: Number(match[2]) }];
+  });
+
+  if (snapshot.parser_version !== 'boss-vue-v1' || !root || !generation || !hasResumeInfo) {
+    return <strong>页面读取结果无效，已安全丢弃</strong>;
+  }
+
+  return (
+    <>
+      <span className="arc-reading__badge">MAIN world 能力探针</span>
+      <strong>已找到可读取的 resumeInfo</strong>
+      <div className="arc-reading__facts" aria-label="Vue 简历能力">
+        <span>{root}</span>
+        <span>{generation}</span>
+        <span>允许字段 {keySet.size}</span>
+      </div>
+      {arrays.length > 0 && (
+        <div className="arc-reading__facts" aria-label="Vue 简历数组条目数量">
+          {arrays.map(({ key, label, count }) => <span key={key}>{label} {count}</span>)}
+        </div>
+      )}
+      <small>仅显示字段名和数量，不包含候选人正文</small>
+    </>
+  );
+}
+
+
 export function PageReadingCard({
   snapshot,
   frameDiagnostics = [],
@@ -359,17 +463,33 @@ export function PageReadingCard({
   selectionReason,
   onRefresh,
   refreshing,
+  onReadResume = () => undefined,
+  resumeReading = false,
+  resumeSnapshot = null,
+  resumeReadError = null,
 }: PageReadingCardProps) {
   return (
     <section className="arc-reading" aria-labelledby="arc-reading-title">
       <div className="arc-section__heading">
         <h2 id="arc-reading-title">页面读取</h2>
-        <button type="button" disabled={refreshing} onClick={onRefresh}>
-          {refreshing ? '正在重新读取' : '重新读取页面'}
-        </button>
+        <div className="arc-reading__actions">
+          <button type="button" disabled={refreshing} onClick={onRefresh}>
+            {refreshing ? '正在重新读取' : '重新读取页面'}
+          </button>
+          <button type="button" disabled={resumeReading} onClick={onReadResume}>
+            {resumeReading ? '正在读取简历' : '读取当前简历'}
+          </button>
+        </div>
       </div>
       <div className="arc-reading__status" role="status">
         <ReadingStatus snapshot={snapshot} />
+      </div>
+      <div className="arc-reading__resume" aria-live="polite">
+        <ResumeCapabilityStatus
+          reading={resumeReading}
+          snapshot={resumeSnapshot}
+          error={resumeReadError}
+        />
       </div>
       <FrameDiagnostics
         frames={frameDiagnostics}

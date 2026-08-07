@@ -11,6 +11,10 @@ import { CopilotPanel } from './CopilotPanel';
 const parserClient = vi.hoisted(() => {
   let listener: ((message: ParserRelayMessage) => void) | null = null;
   const requestRefresh = vi.fn().mockResolvedValue(undefined);
+  const requestResume = vi.fn().mockResolvedValue({
+    ok: false,
+    error: 'vue-root-not-found',
+  });
   const subscribe = vi.fn((next: (message: ParserRelayMessage) => void) => {
     listener = next;
     return () => {
@@ -25,9 +29,14 @@ const parserClient = vi.hoisted(() => {
       listener?.(message);
     },
     requestRefresh,
+    requestResume,
     reset() {
       listener = null;
       requestRefresh.mockReset().mockResolvedValue(undefined);
+      requestResume.mockReset().mockResolvedValue({
+        ok: false,
+        error: 'vue-root-not-found',
+      });
       subscribe.mockClear();
     },
     subscribe,
@@ -45,6 +54,7 @@ vi.mock('../parser/client', async () => {
   return {
     ...actual,
     requestParserRefresh: parserClient.requestRefresh,
+    requestResumeRead: parserClient.requestResume,
     subscribeToParserRelays: parserClient.subscribe,
   };
 });
@@ -214,6 +224,59 @@ describe('CopilotPanel', () => {
     expect(parserClient.requestRefresh).toHaveBeenCalledOnce();
     expect(writeText).not.toHaveBeenCalled();
     expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('reads Vue capability once only after the explicit user click', async () => {
+    const user = userEvent.setup();
+    parserClient.requestResume.mockResolvedValue({
+      ok: true,
+      snapshot: {
+        schema_version: 1,
+        parser_version: 'boss-vue-v1',
+        page_kind: 'recommend_frame',
+        status: 'partial',
+        captured_at: '2026-08-07T02:00:00.000Z',
+        present_fields: [],
+        missing_fields: [],
+        warnings: [
+          'vue-capability:root=lib-resume-recommend',
+          'vue-capability:generation=vue2',
+          'vue-capability:resume-object=resumeInfo',
+          'vue-capability:key=geekBaseInfo',
+        ],
+      },
+    });
+    render(<CopilotPanel />);
+    await screen.findByText('92%');
+
+    expect(parserClient.requestResume).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: '读取当前简历' }));
+
+    expect(parserClient.requestResume).toHaveBeenCalledOnce();
+    expect(await screen.findByText('已找到可读取的 resumeInfo')).toBeInTheDocument();
+    expect(screen.getByText('允许字段 1')).toBeInTheDocument();
+  });
+
+  it('blocks repeated resume reads in flight and renders only the fixed failure copy', async () => {
+    let resolveRead: (value: { ok: false; error: 'vue-instance-not-found' }) => void = () => undefined;
+    parserClient.requestResume.mockReturnValue(new Promise((resolve) => {
+      resolveRead = resolve;
+    }));
+    render(<CopilotPanel />);
+    await screen.findByText('92%');
+
+    const button = screen.getByRole('button', { name: '读取当前简历' });
+    fireEvent.click(button);
+    fireEvent.click(button);
+
+    expect(parserClient.requestResume).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: '正在读取简历' })).toBeDisabled();
+
+    await act(async () => {
+      resolveRead({ ok: false, error: 'vue-instance-not-found' });
+    });
+    expect(screen.getByText('当前页面未暴露可读取的简历数据')).toBeInTheDocument();
+    expect(screen.queryByText(/private/)).not.toBeInTheDocument();
   });
 
   it('shows offline guidance and retry when health check fails', async () => {

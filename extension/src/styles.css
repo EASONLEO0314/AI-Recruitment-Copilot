@@ -266,6 +266,13 @@ button {
   opacity: 0.6;
 }
 
+.arc-reading__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .arc-reading__status {
   display: flex;
   flex-direction: column;
@@ -281,6 +288,28 @@ button {
 }
 
 .arc-reading__status > small {
+  color: #84919a;
+  font-size: 9px;
+}
+
+.arc-reading__resume {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px dashed #d7e1e5;
+  color: var(--arc-muted);
+  font-size: 10px;
+}
+
+.arc-reading__resume > strong {
+  color: var(--arc-ink);
+  font-size: 12px;
+}
+
+.arc-reading__resume > small {
   color: #84919a;
   font-size: 9px;
 }

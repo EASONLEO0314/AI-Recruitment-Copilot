@@ -1,11 +1,14 @@
 import type {
   ParserRefreshRequest,
   ParserRelayMessage,
+  ResumeReadRequest,
+  ResumeReadResponse,
 } from '../contracts';
-import { isParserSnapshot, isRecord } from '../validation';
+import { isParserSnapshot, isRecord, isResumeReadResponse } from '../validation';
 
 
 const REFRESH_REQUEST: ParserRefreshRequest = { type: 'ARC_PARSER_REFRESH' };
+const RESUME_READ_REQUEST: ResumeReadRequest = { type: 'ARC_RESUME_READ' };
 const relayWatermarks = new WeakMap<ParserRelayMessage, number>();
 const MAX_TRACKED_FRAMES = 32;
 
@@ -186,7 +189,9 @@ function defaultRuntime(): typeof chrome.runtime | undefined {
 }
 
 
-async function defaultSendMessage(message: ParserRefreshRequest): Promise<unknown> {
+async function defaultSendMessage(
+  message: ParserRefreshRequest | ResumeReadRequest,
+): Promise<unknown> {
   const runtime = defaultRuntime();
   if (!runtime || typeof runtime.sendMessage !== 'function') {
     throw new Error('Parser runtime is unavailable');
@@ -278,4 +283,18 @@ export async function requestParserRefresh(
     || Object.keys(acknowledgement).length !== 1) {
     throw new Error('Parser refresh was not acknowledged');
   }
+}
+
+
+export async function requestResumeRead(
+  sendMessage?: typeof chrome.runtime.sendMessage,
+): Promise<ResumeReadResponse> {
+  const response = sendMessage
+    ? await sendMessage(RESUME_READ_REQUEST)
+    : await defaultSendMessage(RESUME_READ_REQUEST);
+
+  if (!isResumeReadResponse(response)) {
+    throw new Error('Resume read returned an invalid response');
+  }
+  return response;
 }

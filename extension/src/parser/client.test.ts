@@ -5,6 +5,7 @@ import {
   acceptParserRelay,
   isParserRelayMessage,
   requestParserRefresh,
+  requestResumeRead,
   selectBestParserRelay,
   subscribeToParserRelays,
   upsertParserRelay,
@@ -370,5 +371,60 @@ describe('parser refresh', () => {
     const sendMessage = vi.fn().mockRejectedValue(failure);
 
     await expect(requestParserRefresh(sendMessage)).rejects.toBe(failure);
+  });
+});
+
+
+describe('user-triggered resume read', () => {
+  const snapshot = {
+    schema_version: 1,
+    parser_version: 'boss-vue-v1',
+    page_kind: 'recommend_frame',
+    status: 'partial',
+    captured_at: '2026-08-07T02:00:00.000Z',
+    present_fields: [],
+    missing_fields: [],
+    warnings: [
+      'vue-capability:root=lib-resume-recommend',
+      'vue-capability:generation=vue2',
+      'vue-capability:resume-object=resumeInfo',
+      'vue-capability:key=geekBaseInfo',
+    ],
+  } as const;
+
+  it('sends exactly one fixed request and returns a validated capability snapshot', async () => {
+    const sendMessage = vi.fn().mockResolvedValue({ ok: true, snapshot });
+
+    await expect(requestResumeRead(sendMessage)).resolves.toEqual({ ok: true, snapshot });
+
+    expect(sendMessage).toHaveBeenCalledOnce();
+    expect(sendMessage).toHaveBeenCalledWith({ type: 'ARC_RESUME_READ' });
+  });
+
+  it('returns a validated fixed failure without retrying', async () => {
+    const sendMessage = vi.fn().mockResolvedValue({
+      ok: false,
+      error: 'vue-instance-not-found',
+    });
+
+    await expect(requestResumeRead(sendMessage)).resolves.toEqual({
+      ok: false,
+      error: 'vue-instance-not-found',
+    });
+    expect(sendMessage).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { ok: false, error: 'private-page-error' },
+    { ok: true, snapshot: { ...snapshot, parser_version: 'private-parser' } },
+    { ok: true, snapshot, extra: 'private' },
+    undefined,
+  ])('rejects an invalid resume read response %#', async (response) => {
+    const sendMessage = vi.fn().mockResolvedValue(response);
+
+    await expect(requestResumeRead(sendMessage)).rejects.toThrow(
+      'Resume read returned an invalid response',
+    );
+    expect(sendMessage).toHaveBeenCalledOnce();
   });
 });

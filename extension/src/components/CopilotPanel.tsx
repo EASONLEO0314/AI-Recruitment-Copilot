@@ -6,9 +6,12 @@ import type {
   ConnectionState,
   MessageType,
   ParserRelayMessage,
+  ParserSnapshot,
+  ResumeReadErrorCode,
 } from '../contracts';
 import {
   requestParserRefresh,
+  requestResumeRead,
   selectBestParserRelay,
   subscribeToParserRelays,
   upsertParserRelay,
@@ -72,7 +75,11 @@ export function CopilotPanel() {
   const [copyFeedback, setCopyFeedback] = useState('');
   const [parserRelays, setParserRelays] = useState<ParserRelayMessage[]>([]);
   const [parserRefreshing, setParserRefreshing] = useState(false);
+  const [resumeReading, setResumeReading] = useState(false);
+  const [resumeSnapshot, setResumeSnapshot] = useState<ParserSnapshot | null>(null);
+  const [resumeReadError, setResumeReadError] = useState<ResumeReadErrorCode | null>(null);
   const copyFeedbackTimer = useRef<ReturnType<typeof globalThis.setTimeout> | null>(null);
+  const resumeReadInFlight = useRef(false);
 
   const connect = useCallback(async () => {
     if (copyFeedbackTimer.current !== null) {
@@ -130,10 +137,35 @@ export function CopilotPanel() {
   const refreshPageReading = async () => {
     setParserRefreshing(true);
     setParserRelays([]);
+    setResumeSnapshot(null);
+    setResumeReadError(null);
     try {
       await requestParserRefresh();
     } catch {
       setParserRefreshing(false);
+    }
+  };
+
+  const readCurrentResume = async () => {
+    if (resumeReadInFlight.current) {
+      return;
+    }
+    resumeReadInFlight.current = true;
+    setResumeReading(true);
+    setResumeSnapshot(null);
+    setResumeReadError(null);
+    try {
+      const response = await requestResumeRead();
+      if (response.ok) {
+        setResumeSnapshot(response.snapshot);
+      } else {
+        setResumeReadError(response.error);
+      }
+    } catch {
+      setResumeReadError('vue-read-failed');
+    } finally {
+      resumeReadInFlight.current = false;
+      setResumeReading(false);
     }
   };
 
@@ -216,6 +248,10 @@ export function CopilotPanel() {
           selectionReason={parserSelection?.reason}
           onRefresh={() => void refreshPageReading()}
           refreshing={parserRefreshing}
+          onReadResume={() => void readCurrentResume()}
+          resumeReading={resumeReading}
+          resumeSnapshot={resumeSnapshot}
+          resumeReadError={resumeReadError}
         />
         {connection === 'connecting' && <LoadingState />}
         {connection === 'offline' && <OfflineState onRetry={() => void connect()} />}

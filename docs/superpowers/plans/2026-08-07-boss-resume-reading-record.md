@@ -331,15 +331,15 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 - 修改：`extension/src/components/CopilotPanel.test.tsx`
 - 修改：本文件“实验记录”章节
 
-- [ ] **Step 1：先写失败的交互测试**
+- [x] **Step 1：先写失败的交互测试**
 
   点击“读取当前简历”只发送一次 `ARC_RESUME_READ`；请求期间按钮禁用；失败显示固定错误文案；不得自动重试或自动刷新页面。
 
-- [ ] **Step 2：实现客户端请求与界面状态**
+- [x] **Step 2：实现客户端请求与界面状态**
 
   保留原来的 DOM 诊断刷新能力，但将完整简历读取设置为明确的用户操作。能力探针结果只显示：根是否命中、Vue 代际、允许字段数量和数组数量，不显示字段值。
 
-- [ ] **Step 3：运行组件与客户端测试**
+- [x] **Step 3：运行组件与客户端测试**
 
   ```powershell
   npm.cmd run test --workspace extension -- src/parser/client.test.ts src/components/PageReadingCard.test.tsx src/components/CopilotPanel.test.tsx --run
@@ -352,6 +352,8 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
   ```
 
   然后人工执行：Chrome 扩展页刷新扩展 → 刷新 BOSS 页面 → 用户手动打开一名候选人 → 点击一次“读取当前简历”。
+
+  2026-08-07 自动部分结果：扩展 18 个测试文件、206 个测试全部通过，TypeScript 类型检查通过，生产构建成功；人工刷新和真实页面单次点击尚未执行，因此本步骤保持未完成。
 
 - [ ] **Step 5：只记录匿名能力结果**
 

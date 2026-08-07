@@ -236,4 +236,93 @@ describe('PageReadingCard', () => {
     expect(screen.getByRole('button', { name: '正在重新读取' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: '重新读取页面' })).not.toBeInTheDocument();
   });
+
+  it('triggers one explicit resume read and disables it while in flight', async () => {
+    const user = userEvent.setup();
+    const onReadResume = vi.fn();
+    const { rerender } = render(
+      <PageReadingCard
+        snapshot={partialSnapshot}
+        onRefresh={vi.fn()}
+        refreshing={false}
+        onReadResume={onReadResume}
+        resumeReading={false}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '读取当前简历' }));
+    expect(onReadResume).toHaveBeenCalledOnce();
+
+    rerender(
+      <PageReadingCard
+        snapshot={partialSnapshot}
+        onRefresh={vi.fn()}
+        refreshing={false}
+        onReadResume={onReadResume}
+        resumeReading
+      />,
+    );
+    expect(screen.getByRole('button', { name: '正在读取简历' })).toBeDisabled();
+  });
+
+  it('shows only fixed Vue capability metadata and array counts', () => {
+    const resumeSnapshot: ParserSnapshot = {
+      schema_version: 1,
+      parser_version: 'boss-vue-v1',
+      page_kind: 'recommend_frame',
+      status: 'partial',
+      captured_at: '2026-08-07T02:00:00.000Z',
+      present_fields: [],
+      missing_fields: [],
+      warnings: [
+        'vue-capability:root=lib-resume-recommend',
+        'vue-capability:generation=vue2',
+        'vue-capability:resume-object=resumeInfo',
+        'vue-capability:key=geekBaseInfo',
+        'vue-capability:key=geekWorkExpList',
+        'vue-capability:array=geekWorkExpList:3',
+        'private-candidate-value',
+      ],
+    };
+
+    render(
+      <PageReadingCard
+        snapshot={partialSnapshot}
+        onRefresh={vi.fn()}
+        refreshing={false}
+        onReadResume={vi.fn()}
+        resumeReading={false}
+        resumeSnapshot={resumeSnapshot}
+      />,
+    );
+
+    expect(screen.getByText('已找到可读取的 resumeInfo')).toBeInTheDocument();
+    expect(screen.getByText('推荐简历根')).toBeInTheDocument();
+    expect(screen.getByText('Vue 2')).toBeInTheDocument();
+    expect(screen.getByText('允许字段 2')).toBeInTheDocument();
+    expect(screen.getByText('工作经历 3')).toBeInTheDocument();
+    expect(screen.queryByText('private-candidate-value')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['vue-root-not-found', '未找到当前简历，请先手动打开候选人简历'],
+    ['vue-instance-not-found', '当前页面未暴露可读取的简历数据'],
+    ['vue-resume-data-unavailable', '未获取到完整简历，可稍后评估 OCR 方案'],
+    ['vue-schema-unsupported', '检测到新的简历结构，暂未适配'],
+    ['vue-result-invalid', '页面读取结果无效，已安全丢弃'],
+    ['vue-read-failed', '简历读取失败，可手动重试'],
+  ] as const)('shows the fixed error copy for %s', (resumeReadError, message) => {
+    render(
+      <PageReadingCard
+        snapshot={partialSnapshot}
+        onRefresh={vi.fn()}
+        refreshing={false}
+        onReadResume={vi.fn()}
+        resumeReading={false}
+        resumeReadError={resumeReadError}
+      />,
+    );
+
+    expect(screen.getByText(message)).toBeInTheDocument();
+  });
 });
