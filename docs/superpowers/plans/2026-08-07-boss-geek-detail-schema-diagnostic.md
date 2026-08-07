@@ -24,7 +24,7 @@
 - Modify: `extension/src/parser/vueResumeMapper.test.ts`
 - Modify: `extension/src/background.test.ts`
 
-- [ ] **Step 1：先写失败的 mapper 测试**
+- [x] **Step 1：先写失败的 mapper 测试**
 
 在 mapper fixture 中准备以下对象，并把它作为顶层 `geekDetailInfo` getter 的返回值：
 
@@ -60,7 +60,7 @@ nested_schema: [
 
 断言序列化结果不含“不得读取”，`childAccessor` 未被调用，`geekQuestInfoVO` 未被读取。再增加严格校验用例，拒绝：未知容器、重复键、非法键名、未知类型、数组缺少长度、非数组携带长度以及第 41 项。
 
-- [ ] **Step 2：运行测试确认 RED**
+- [x] **Step 2：运行测试确认 RED**
 
 Run:
 
@@ -70,7 +70,9 @@ npm.cmd --prefix extension run test:run -- src/parser/vueResumeMapper.test.ts sr
 
 Expected: FAIL，原因是 ready probe 尚无 `nested_schema`，也没有固定容器校验。
 
-- [ ] **Step 3：实现最小的固定容器单层诊断**
+实际结果：2 个测试文件出现 6 项预期失败，均指向缺少 `nested_schema` 协议或新协议尚未被校验。
+
+- [x] **Step 3：实现最小的固定容器单层诊断**
 
 在 `VueResumeProfileFrameProbe` ready 分支新增必填 `nested_schema`，定义：
 
@@ -108,7 +110,9 @@ nested_schema: nestedSchemaFor(resumeInfo),
 
 校验器必须只接受 `container: 'geekDetailInfo'`，并复用顶层 schema 的键名、类型、数组长度、数量和去重规则。同步给 `background.test.ts` 的所有 ready fixture 加入 `nested_schema: []`，避免伪造旧协议。
 
-- [ ] **Step 4：运行聚焦测试和类型检查确认 GREEN**
+- [x] **Step 4：运行聚焦测试和类型检查确认 GREEN**
+
+实际结果：2 个测试文件 26 项通过，类型检查 exit code 0。提交前审查另发现 `nested-schema-key-coercion`：校验器在确认键为字符串前执行 `String(key)`，可能触发不可信 `toString`。新增失败测试复现后，改为先检查 `typeof key === 'string'`；聚焦测试与类型检查再次通过。
 
 Run:
 
@@ -119,7 +123,7 @@ npm.cmd --prefix extension run typecheck
 
 Expected: mapper 与后台测试通过，类型检查 exit code 0。
 
-- [ ] **Step 5：提交 MAIN world 诊断协议**
+- [x] **Step 5：提交 MAIN world 诊断协议**
 
 ```powershell
 git add extension/src/parser/vueResumeMapper.ts extension/src/parser/vueResumeMapper.test.ts extension/src/background.test.ts
@@ -134,7 +138,7 @@ git commit -m "feat: probe BOSS geek detail schema safely"
 - Modify: `extension/src/validation.ts`
 - Modify: `extension/src/validation.test.ts`
 
-- [ ] **Step 1：先写失败的后台与容量测试**
+- [x] **Step 1：先写失败的后台与容量测试**
 
 在后台 ready probe 加入：
 
@@ -163,7 +167,7 @@ nested_schema: [
 
 在 `validation.test.ts` 断言：`boss-vue-v1` 接受 93 条 warning、拒绝 97 条；`boss-dom-v1` 仍拒绝 41 条。
 
-- [ ] **Step 2：运行测试确认 RED**
+- [x] **Step 2：运行测试确认 RED**
 
 Run:
 
@@ -173,7 +177,9 @@ npm.cmd --prefix extension run test:run -- src/background.test.ts src/validation
 
 Expected: FAIL，原因是后台尚未编码下一层结构，Vue warning 上限仍为 64。
 
-- [ ] **Step 3：实现固定 warning 与精确上限**
+实际结果：2 个测试文件各出现 1 项预期失败；后台缺少两条下一层 warning，93 条 Vue 结果被 64 条上限拒绝。
+
+- [x] **Step 3：实现固定 warning 与精确上限**
 
 在 `capabilitySnapshot` 中追加：
 
@@ -187,7 +193,9 @@ Expected: FAIL，原因是后台尚未编码下一层结构，Vue warning 上限
 
 最坏情况为 3 条固定能力信息、6 个允许字段、4 个数组长度、40 个顶层字段、40 个下一层字段，共 93 条。将 `VUE_WARNING_MAX_ITEMS` 从 64 调整为 96；保持 `DOM_WARNING_MAX_ITEMS = 40`，单条字符串长度仍为 160。
 
-- [ ] **Step 4：运行聚焦测试和类型检查确认 GREEN**
+- [x] **Step 4：运行聚焦测试和类型检查确认 GREEN**
+
+实际结果：2 个测试文件 26 项通过，类型检查 exit code 0；Vue 接受 93、拒绝 97，DOM 仍拒绝 41。
 
 Run:
 
@@ -198,7 +206,7 @@ npm.cmd --prefix extension run typecheck
 
 Expected: 两个测试文件通过，类型检查 exit code 0。
 
-- [ ] **Step 5：提交后台传输边界**
+- [x] **Step 5：提交后台传输边界**
 
 ```powershell
 git add extension/src/background.ts extension/src/background.test.ts extension/src/validation.ts extension/src/validation.test.ts
@@ -211,7 +219,7 @@ git commit -m "feat: relay BOSS geek detail schema safely"
 - Modify: `extension/src/components/PageReadingCard.tsx`
 - Modify: `extension/src/components/PageReadingCard.test.tsx`
 
-- [ ] **Step 1：先写失败的界面测试**
+- [x] **Step 1：先写失败的界面测试**
 
 给 Vue snapshot 增加：
 
@@ -225,7 +233,7 @@ git commit -m "feat: relay BOSS geek detail schema safely"
 
 期望显示标题 `geekDetailInfo 下一层字段（仅结构）`、`professionalSkill · 字符串`、`skillItems · 数组 3`；未知容器、非法键名和带候选人值后缀的 warning 不显示。
 
-- [ ] **Step 2：运行测试确认 RED**
+- [x] **Step 2：运行测试确认 RED**
 
 Run:
 
@@ -235,7 +243,9 @@ npm.cmd --prefix extension run test:run -- src/components/PageReadingCard.test.t
 
 Expected: FAIL，原因是界面尚未解析和显示下一层 schema。
 
-- [ ] **Step 3：实现锚定解析与固定展示**
+实际结果：1 项按预期失败，页面找不到 `geekDetailInfo 下一层字段（仅结构）`。
+
+- [x] **Step 3：实现锚定解析与固定展示**
 
 新增只接受固定容器的正则：
 
@@ -245,7 +255,9 @@ const VUE_NESTED_SCHEMA_WARNING = /^vue-nested-schema:container=(geekDetailInfo)
 
 复用现有中文类型标签；数组必须带长度，非数组不得带长度，键名去重，最多显示 40 项。下一层列表使用独立 `aria-label="Vue geekDetailInfo 下一层 schema"`，不显示任何未匹配 warning。
 
-- [ ] **Step 4：运行聚焦测试和类型检查确认 GREEN**
+- [x] **Step 4：运行聚焦测试和类型检查确认 GREEN**
+
+实际结果：界面测试文件 20 项通过，类型检查 exit code 0。
 
 Run:
 
@@ -256,7 +268,7 @@ npm.cmd --prefix extension run typecheck
 
 Expected: 界面测试通过，类型检查 exit code 0。
 
-- [ ] **Step 5：提交界面诊断**
+- [x] **Step 5：提交界面诊断**
 
 ```powershell
 git add extension/src/components/PageReadingCard.tsx extension/src/components/PageReadingCard.test.tsx
@@ -270,11 +282,15 @@ git commit -m "feat: show BOSS geek detail schema"
 - Modify: `docs/superpowers/plans/2026-08-07-boss-geek-detail-schema-diagnostic.md`
 - Modify: `docs/validation/m2-loop-log.md`
 
-- [ ] **Step 1：记录现场结果和本轮边界**
+- [x] **Step 1：记录现场结果和本轮边界**
+
+实际结果：已记录 `sample-01-top-schema`，只保留顶层字段名与结构结论；未记录候选人姓名或正文。问题指纹为 `skill-not-in-top-level-resumeInfo`，本轮仍不更新人工准确率。
 
 记录 `skill-not-in-top-level-resumeInfo`、现场顶层存在 `geekDetailInfo`、公开检索未提供可验证内部结构，以及本轮只增加固定容器下一层无值诊断。明确技能仍未修复，人工准确率不更新。
 
-- [ ] **Step 2：运行安全扫描**
+- [x] **Step 2：运行安全扫描**
+
+实际结果：目标文件无匹配；本轮未新增自动页面行为、浏览器存储、Cookie、debugger 或 BOSS 网络请求。
 
 Run:
 
@@ -284,7 +300,9 @@ rg -n "chrome\.debugger|webRequest|cookies|localStorage|sessionStorage|\.click\(
 
 Expected: 无匹配；新增路径没有自动页面行为、存储、Cookie、debugger 或 BOSS 网络请求。
 
-- [ ] **Step 3：运行完整验证**
+- [x] **Step 3：运行完整验证**
+
+实际结果：`npm.cmd run verify` exit code 0；后端 12 项、扩展 19 个测试文件 218 项通过，类型检查通过，content/background production build 通过。
 
 Run:
 
@@ -294,7 +312,11 @@ npm.cmd run verify
 
 Expected: 后端测试、扩展测试、类型检查及 content/background 构建全部 exit code 0。
 
-- [ ] **Step 4：审查最终差异**
+- [x] **Step 4：审查最终差异**
+
+审查发现并修复 `nested-schema-read-before-selection`：多 Vue handle 场景中，旧实现会在选出最丰富候选人前读取每个 handle 的 `geekDetailInfo`。失败测试确认未选中的稀疏候选人 getter 被调用 1 次；修复后只对最终选中候选人读取一次，未选中候选人为 0 次。4 个相关测试文件 51 项与类型检查通过。
+
+最终结果：重新审阅 `ef3f889..8077ac7` 的 4 个实现提交、8 个代码/测试文件，未发现新的 P0/P1/P2 问题；`git diff --check` 无错误。工作区只剩计划内三份中文记录和未跟踪的 `extension/dist.crx`、`extension/dist.pem`。
 
 Run:
 
@@ -306,7 +328,7 @@ git status --short --branch
 
 Expected: 仅包含计划内代码、测试和中文记录；`extension/dist.crx`、`extension/dist.pem` 保持未跟踪且不暂存。
 
-- [ ] **Step 5：提交记录**
+- [x] **Step 5：提交记录**
 
 ```powershell
 git add docs/superpowers/plans/2026-08-07-boss-resume-reading-record.md docs/superpowers/plans/2026-08-07-boss-geek-detail-schema-diagnostic.md docs/validation/m2-loop-log.md

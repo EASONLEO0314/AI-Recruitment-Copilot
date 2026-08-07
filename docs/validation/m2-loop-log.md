@@ -218,7 +218,13 @@ npm.cmd run verify
 - 本轮只增加由用户点击触发的 `resumeInfo` 顶层 schema 诊断：最多 40 个安全键名、固定类型和最大 50 的数组长度；不返回任何值，不持久化，不新增自动操作。
 - 代码审查发现 `schema-warning-budget-overflow`：完整 schema 诊断最多产生 53 条 warning，旧校验上限 40 会使客户端安全丢弃整个读取结果。失败测试确认该问题后，将上限仅对 `boss-vue-v1` 调整为 64；DOM 快照仍为 40，65 条 Vue warning 仍被拒绝。
 - 完整验证：`npm.cmd run verify` exit code 0；后端 12 项、扩展 19 个测试文件 218 项通过，类型检查与两种扩展构建通过。安全扫描未匹配自动点击、聚焦、滚动、BOSS 网络请求、浏览器存储、Cookie 或 debugger 使用。
-- 在真实 schema 证据返回之前，不猜测技能字段名，也不宣布技能问题已经修复。
+- 顶层 schema 人工证据：返回 40 个安全键名，存在 `geekDetailInfo`，不存在 `skillTagList`；全部显示 `other`，符合 Vue 2 访问器属性不调用 getter 的诊断设计。唯一问题指纹更新为 `skill-not-in-top-level-resumeInfo`。
+- 公开检索没有找到可验证的 `geekDetailInfo` 内部字段结构，因此不依据网络猜测字段名。
+- 下一步实现只读取固定 `resumeInfo.geekDetailInfo` 一次，并仅枚举直接子字段结构；不检查 `geekQuestInfoVO` 或其他顶层容器，不输出字段值。
+- TDD 自检发现并修复 `nested-schema-key-coercion`：嵌套校验器曾在确认键为字符串前调用 `String(key)`；失败测试证明可触发不可信 `toString` 后，已改为先做类型检查。
+- 最终代码审查发现并修复 `nested-schema-read-before-selection`：多 Vue handle 场景曾在选出最丰富候选人前读取每个 handle 的 `geekDetailInfo`。失败测试确认问题后，将下一层读取延后到排序完成；未选中的 getter 调用 0 次，选中的 getter 调用 1 次。
+- 下一层诊断构建验证：`npm.cmd run verify` exit code 0；后端 12 项、扩展 19 个测试文件 218 项通过，类型检查和 content/background production build 通过。安全扫描无匹配。
+- 在真实下一层 schema 证据返回之前，不猜测技能字段名，也不宣布技能问题已经修复。
 
 ## 未登录公开职位临时探针（已中止）
 

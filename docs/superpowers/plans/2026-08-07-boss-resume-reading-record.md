@@ -492,6 +492,7 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 | 2026-08-07 | `research-only` | 公开插件可能给出完整简历读取入口 | 未操作 BOSS；仅静态检查公开 ZIP | 发现 `.lib-resume-recommend → resumeInfo` 尝试及 OCR 主回退 | 研究通过 | 下一步验证当前 BOSS 版本是否暴露 Vue 数据 |
 | 2026-08-07 | `sample-01` | 可见 `.lib-resume-recommend` 在 MAIN world 暴露可用 `resumeInfo` | 用户刷新扩展、手动打开候选人并点击一次“读取当前简历” | 命中推荐简历根、Vue 2、`resumeInfo`；允许字段 4；工作数组 1、教育数组 2、项目数组 1 | 能力探针通过 | 进入 Task 4；未记录任何候选人字段值 |
 | 2026-08-07 | `sample-01-skill-gap` | 现有 `skillTagList` 可覆盖页面“专业技能” | 用户手动对比读取卡与 BOSS 简历 | 读取卡显示工作 1、教育 2、项目 4、技能缺失；BOSS 页面可见“专业技能”正文 | 假设失败 | `skill-present-but-skillTagList-absent`；先运行无值 schema 诊断，不猜字段名 |
+| 2026-08-07 | `sample-01-top-schema` | 技能位于 `resumeInfo` 顶层未知字段 | 用户重新加载诊断版本并手动点击一次“读取当前简历” | 顶层返回 40 个安全键名；存在 `geekDetailInfo`，不存在 `skillTagList`；Vue 2 访问器统一标记为 `other` | 假设失败 | `skill-not-in-top-level-resumeInfo`；下一步只诊断 `geekDetailInfo` 直接子字段，不记录字段值 |
 
 ## 9. OCR 兜底决策门槛
 
@@ -515,4 +516,6 @@ OCR 方案必须另行确认：
 
 Vue 白名单映射与 DOM/Vue 会话化合并已实现。匿名样本确认工作、教育、项目可以读取，但 BOSS 页面存在“专业技能”正文时，当前 `skillTagList` 仍缺失。
 
-当前进入安全 schema 诊断：只在用户点击后显示 `resumeInfo` 顶层字段名、固定类型和数组长度，不返回字段值。取得现场 schema 前不新增技能映射；OCR 仍不实施。
+顶层安全 schema 诊断已经完成：`resumeInfo` 中存在 `geekDetailInfo`，但不存在 `skillTagList`，因此技能不在现有顶层白名单路径。
+
+当前进入固定容器下一层诊断：只在用户点击后访问 `geekDetailInfo` 一次，并显示其直接子字段名、固定类型和数组长度；不检查其他容器，不返回字段值。取得下一层现场证据前不新增技能映射；OCR 仍不实施。
