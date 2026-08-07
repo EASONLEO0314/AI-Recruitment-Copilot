@@ -261,17 +261,17 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 - 修改：`extension/src/background.ts`
 - 修改：`extension/src/background.test.ts`
 
-- [ ] **Step 1：使用合成 DOM 和合成 Vue 对象写失败测试**
+- [x] **Step 1：使用合成 DOM 和合成 Vue 对象写失败测试**
 
   覆盖：可见根、隐藏根、Vue 2 命中、无 Vue、无 `resumeInfo`、多个 frame 结果。测试中的候选值只能使用匿名 fixture，例如 `候选人A`。
 
-- [ ] **Step 2：运行聚焦测试并确认能力探针尚不存在**
+- [x] **Step 2：运行聚焦测试并确认能力探针尚不存在**
 
   ```powershell
   npm.cmd run test --workspace extension -- src/parser/vueResumeProbe.test.ts src/background.test.ts --run
   ```
 
-- [ ] **Step 3：实现完全自包含的注入函数**
+- [x] **Step 3：实现完全自包含的注入函数**
 
   `extractBossVueResumeCapability()` 内部只能包含局部 helper 和字面量，确保传给 `chrome.scripting.executeScript({ func })` 后不引用模块外变量。返回结构限定为：
 
@@ -287,7 +287,7 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 
   `allowed_keys` 必须与扩展内固定候选键集合求交集；不得返回任意页面键名。
 
-- [ ] **Step 4：在 background 中只接受 frame 0 发起的用户请求**
+- [x] **Step 4：在 background 中只接受 frame 0 发起的用户请求**
 
   调用参数固定为：
 
@@ -301,7 +301,7 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 
   结果必须先经过扩展侧校验；不能把 `InjectionResult` 原样返回给页面。
 
-- [ ] **Step 5：运行聚焦测试和生产安全扫描**
+- [x] **Step 5：运行聚焦测试和生产安全扫描**
 
   ```powershell
   npm.cmd run test --workspace extension -- src/parser/vueResumeProbe.test.ts src/background.test.ts --run
@@ -310,7 +310,9 @@ Service Worker 校验、限长、选择结构化字段最完整的结果
 
   预期：测试通过；新增读取路径中没有 BOSS fetch、debugger、click 或 scroll。
 
-- [ ] **Step 6：提交能力探针**
+  2026-08-07 实际结果：29 个聚焦测试通过，TypeScript 类型检查通过；安全扫描未命中 `fetch`、`chrome.debugger`、`click` 或 `scroll`。代码审阅额外发现并修复了“先遇到无关 Vue 实例即停止”和“多个可见根误选旧根”两个问题，均有回归测试。
+
+- [x] **Step 6：提交能力探针**
 
   ```powershell
   git add extension/src/parser/vueResumeProbe.ts extension/src/parser/vueResumeProbe.test.ts extension/src/background.ts extension/src/background.test.ts

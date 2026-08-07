@@ -5,6 +5,19 @@ import {
   handleApiRequest,
   isApiRequestMessage,
 } from './background';
+import * as backgroundModule from './background';
+
+
+type ResumeReadHandler = (
+  tabId: number,
+  executeScript: (details: unknown) => Promise<Array<{ frameId: number; result?: unknown }>>,
+  now: () => Date,
+) => Promise<unknown>;
+
+
+function resumeReadHandler(): ResumeReadHandler | undefined {
+  return (backgroundModule as unknown as { handleResumeRead?: ResumeReadHandler }).handleResumeRead;
+}
 
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -197,4 +210,197 @@ describe('background runtime listener', () => {
       expect(sendResponse).not.toHaveBeenCalled();
     },
   );
+
+  it('accepts a resume read request only from frame zero', async () => {
+    const fetcher = vi.fn();
+    const routeParser = vi.fn();
+    const readResume = vi.fn().mockResolvedValue({
+      ok: false,
+      error: 'vue-root-not-found',
+    });
+    const sendResponse = vi.fn();
+    const listener = createRuntimeMessageListener(fetcher, routeParser, readResume);
+
+    expect(listener(
+      { type: 'ARC_RESUME_READ' },
+      { tab: { id: 17 }, frameId: 0 },
+      sendResponse,
+    )).toBe(true);
+    await vi.waitFor(() => {
+      expect(sendResponse).toHaveBeenCalledWith({
+        ok: false,
+        error: 'vue-root-not-found',
+      });
+    });
+    expect(readResume).toHaveBeenCalledWith(17);
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(routeParser).not.toHaveBeenCalled();
+
+    expect(listener(
+      { type: 'ARC_RESUME_READ' },
+      { tab: { id: 17 }, frameId: 3 },
+      vi.fn(),
+    )).toBe(false);
+    expect(readResume).toHaveBeenCalledOnce();
+  });
+});
+
+
+describe('MAIN-world resume read handler', () => {
+  it('executes the bounded probe in MAIN world across the current tab frames', async () => {
+    const executeScript = vi.fn().mockResolvedValue([{
+      frameId: 4,
+      result: {
+        status: 'ready',
+        capability: {
+          root: 'lib-resume-recommend',
+          vue_generation: 'vue2',
+          resume_object: 'resumeInfo',
+          allowed_keys: ['geekBaseInfo', 'geekWorkExpList'],
+          array_lengths: { geekWorkExpList: 2 },
+        },
+      },
+    }]);
+
+    const response = await resumeReadHandler()?.(
+      17,
+      executeScript,
+      () => new Date('2026-08-07T02:00:00.000Z'),
+    );
+
+    expect(executeScript).toHaveBeenCalledWith({
+      target: { tabId: 17, allFrames: true },
+      world: 'MAIN',
+      func: expect.any(Function),
+    });
+    expect(response).toEqual({
+      ok: true,
+      snapshot: {
+        schema_version: 1,
+        parser_version: 'boss-vue-v1',
+        page_kind: 'recommend_frame',
+        status: 'partial',
+        captured_at: '2026-08-07T02:00:00.000Z',
+        present_fields: [],
+        missing_fields: [],
+        warnings: [
+          'vue-capability:root=lib-resume-recommend',
+          'vue-capability:generation=vue2',
+          'vue-capability:resume-object=resumeInfo',
+          'vue-capability:key=geekBaseInfo',
+          'vue-capability:key=geekWorkExpList',
+          'vue-capability:array=geekWorkExpList:2',
+        ],
+      },
+    });
+  });
+
+  it('selects the valid frame with the richest whitelisted capability', async () => {
+    const executeScript = vi.fn().mockResolvedValue([
+      {
+        frameId: 3,
+        result: {
+          status: 'ready',
+          capability: {
+            root: 'lib-resume-anonymous',
+            vue_generation: 'vue2',
+            resume_object: 'resumeInfo',
+            allowed_keys: ['geekBaseInfo'],
+            array_lengths: {},
+          },
+        },
+      },
+      {
+        frameId: 4,
+        result: {
+          status: 'ready',
+          capability: {
+            root: 'lib-resume-recommend',
+            vue_generation: 'vue3',
+            resume_object: 'resumeInfo',
+            allowed_keys: ['geekBaseInfo', 'geekWorkExpList'],
+            array_lengths: { geekWorkExpList: 3 },
+          },
+        },
+      },
+    ]);
+
+    const response = await resumeReadHandler()?.(
+      17,
+      executeScript,
+      () => new Date('2026-08-07T02:00:00.000Z'),
+    );
+
+    expect(JSON.stringify(response)).toContain('vue-capability:generation=vue3');
+    expect(JSON.stringify(response)).toContain('vue-capability:array=geekWorkExpList:3');
+    expect(JSON.stringify(response)).not.toContain('lib-resume-anonymous');
+  });
+
+  it('ignores an invalid frame when another frame returns a valid capability', async () => {
+    const executeScript = vi.fn().mockResolvedValue([
+      { frameId: 0, result: { status: 'private-error', detail: 'secret' } },
+      {
+        frameId: 4,
+        result: {
+          status: 'ready',
+          capability: {
+            root: 'lib-resume-recommend',
+            vue_generation: 'vue2',
+            resume_object: 'resumeInfo',
+            allowed_keys: ['geekBaseInfo'],
+            array_lengths: {},
+          },
+        },
+      },
+    ]);
+
+    const response = await resumeReadHandler()?.(
+      17,
+      executeScript,
+      () => new Date('2026-08-07T02:00:00.000Z'),
+    );
+
+    expect(response).toMatchObject({
+      ok: true,
+      snapshot: { parser_version: 'boss-vue-v1' },
+    });
+    expect(JSON.stringify(response)).not.toContain('private-error');
+    expect(JSON.stringify(response)).not.toContain('secret');
+  });
+
+  it.each([
+    ['no visible root', [{ frameId: 0, result: { status: 'vue-root-not-found' } }], 'vue-root-not-found'],
+    ['root without Vue', [{
+      frameId: 4,
+      result: { status: 'vue-instance-not-found', root: 'lib-resume-recommend' },
+    }], 'vue-instance-not-found'],
+    ['Vue without resume data', [{
+      frameId: 4,
+      result: {
+        status: 'vue-resume-data-unavailable',
+        root: 'lib-resume-recommend',
+        vue_generation: 'vue2',
+      },
+    }], 'vue-resume-data-unavailable'],
+    ['invalid frame result', [{ frameId: 4, result: { status: 'private-error', detail: 'secret' } }], 'vue-result-invalid'],
+  ])('returns a fixed failure for %s', async (_label, results, expectedError) => {
+    const response = await resumeReadHandler()?.(
+      17,
+      vi.fn().mockResolvedValue(results),
+      () => new Date('2026-08-07T02:00:00.000Z'),
+    );
+
+    expect(response).toEqual({ ok: false, error: expectedError });
+  });
+
+  it('maps script execution rejection to a fixed failure without exception text', async () => {
+    const response = await resumeReadHandler()?.(
+      17,
+      vi.fn().mockRejectedValue(new Error('private browser detail')),
+      () => new Date('2026-08-07T02:00:00.000Z'),
+    );
+
+    expect(response).toEqual({ ok: false, error: 'vue-read-failed' });
+    expect(JSON.stringify(response)).not.toContain('private browser detail');
+  });
 });
