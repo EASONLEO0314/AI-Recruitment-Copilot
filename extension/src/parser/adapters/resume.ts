@@ -92,6 +92,17 @@ const PROFILE_HEADER_SKILL_SELECTORS = [
   ':scope .ai-preference-content-option .title',
   ':scope .ai-preference-content-option span',
 ].join(', ');
+const GENERAL_TAG_SKILL_SELECTORS = [
+  '.skill-label',
+  '.skill-tag',
+  '.tags-wrap span',
+  '.tag-item',
+  '.label',
+  '.badge',
+  '[class]',
+].join(', ');
+const GENERAL_TAG_CLASS_PATTERN = /(?:^|[-_])(?:tag|tags|skill|label|badge)(?:$|[-_])/i;
+const GENERAL_TAG_NON_SKILL_PATTERN = /^(?:优势|亮点|标签|技能|工作|教育|项目|简历|候选人|推荐|未读|已读|查看|联系|沟通|打招呼|聊一聊|感兴趣|不合适|举报|反馈|本科|硕士|博士|大专|高中|中专|男|女|活跃|今日活跃|刚刚活跃|在线|离线|在职.*|离职.*|随时到岗|应届生|.+工程师|.+经理|.+主管|.+负责人|.+顾问|.+专家|.+架构师|\d+\s*(?:年|岁)(?:经验)?|\d+\s*[-~]\s*\d+\s*年(?:经验)?|\d+\s*[-~]\s*\d+\s*[kK]?)$/;
 
 const workSelectors = {
   company: ['.company-name', '.company-name-wrap', '.company'],
@@ -410,6 +421,35 @@ function addProfileHeaderSkillText(
 }
 
 
+function addGeneralTagSkillText(values: Set<string>, text: string, excludedTexts: ReadonlySet<string>): void {
+  const normalized = normalizeText(text, 80);
+  const compact = normalized.replace(/\s+/g, '');
+  if (!normalized
+    || excludedTexts.has(normalized)
+    || excludedTexts.has(compact)
+    || GENERAL_TAG_NON_SKILL_PATTERN.test(normalized)
+    || GENERAL_TAG_NON_SKILL_PATTERN.test(compact)
+    || (/^[\u4e00-\u9fff\s]+$/.test(normalized) && normalized.length > 10)
+    || !isLikelySkillToken(normalized)) {
+    return;
+  }
+  values.add(normalized);
+}
+
+
+function isGeneralTagElement(element: Element): boolean {
+  return element.matches('.skill-label, .skill-tag, .tag-item, .label, .badge')
+    || element.closest('.tags-wrap') !== null
+    || Array.from(element.classList).some((token) => GENERAL_TAG_CLASS_PATTERN.test(token));
+}
+
+
+function hasNestedGeneralTagElement(element: Element): boolean {
+  return deepQuerySelectorAll(element, GENERAL_TAG_SKILL_SELECTORS, 50)
+    .some((child) => child !== element && isGeneralTagElement(child));
+}
+
+
 function collectSkillTokens(container: Element, heading: Element): string[] {
   const values = new Set<string>();
   for (const element of deepQuerySelectorAll(container, SKILL_TOKEN_SELECTORS)) {
@@ -429,6 +469,24 @@ function collectSkillTokens(container: Element, heading: Element): string[] {
   }
 
   return Array.from(values);
+}
+
+
+function skillTextsFromGeneralTags(
+  root: Element,
+  excludedTexts: ReadonlySet<string>,
+): string[] {
+  const values = new Set<string>();
+  for (const element of deepQuerySelectorAll(root, GENERAL_TAG_SKILL_SELECTORS, 500)) {
+    if (isHidden(element) || !isGeneralTagElement(element) || hasNestedGeneralTagElement(element)) {
+      continue;
+    }
+    addGeneralTagSkillText(values, visibleText(element, 80), excludedTexts);
+    if (values.size >= 20) {
+      break;
+    }
+  }
+  return Array.from(values).slice(0, 20);
 }
 
 
@@ -615,6 +673,7 @@ export function parseResumeRoot(
     ),
     ...skillTextsNearHeadings(root),
     ...skillTextsNearProfileHeader(root, excludedHeaderTexts),
+    ...skillTextsFromGeneralTags(root, excludedHeaderTexts),
   ];
 
   const profile: CandidateProfile = {

@@ -198,6 +198,42 @@ describe('resume frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('promotes high-confidence generic tag classes to skills', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="resume-content">
+        <h1 class="resume-name">候选人标签</h1>
+        <section class="resume-item">
+          <h2 class="section-title">工作经历</h2>
+          <article class="history-item">
+            <span class="company-name">示例公司</span>
+            <span class="position-name">前端工程师</span>
+          </article>
+        </section>
+        <div class="tag-cloud">
+          <span class="boss-tag">前端</span>
+          <span class="boss-tag">优势</span>
+          <span class="boss-tag">AI全栈开发</span>
+          <span class="boss-tag">3-5年经验</span>
+          <span class="boss-tag">本科</span>
+          <span class="boss-tag">微服务开发</span>
+          <span class="boss-tag">系统架构设计</span>
+        </div>
+      </main>`);
+
+    const snapshot = parseResumeFrame(document, capturedAt);
+
+    expect(snapshot.profile?.skills).toEqual([
+      '前端',
+      'AI全栈开发',
+      '微服务开发',
+      '系统架构设计',
+    ]);
+    expect(snapshot.profile?.skills).not.toContain('优势');
+    expect(snapshot.profile?.skills).not.toContain('3-5年经验');
+    expect(snapshot.profile?.skills).not.toContain('本科');
+    expectNoPageOperations();
+  });
+
   it('returns unsupported when no recognized resume root exists', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="unrelated-page">
