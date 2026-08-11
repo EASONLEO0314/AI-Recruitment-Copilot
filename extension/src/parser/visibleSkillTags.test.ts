@@ -122,6 +122,68 @@ describe('visible BOSS skill tag extractor', () => {
     ]);
   });
 
+  it('falls back to broad tag scanning while filtering fixed BOSS chrome', () => {
+    document.body.innerHTML = `
+      <header class="boss-top-banner">
+        <span class="boss-tag">44</span>
+        <span class="boss-tag">新</span>
+        <span class="boss-tag">招聘规范</span>
+        <span class="boss-tag">我的客服</span>
+        <span class="boss-tag">面试</span>
+        <span class="boss-tag">招聘数据</span>
+        <span class="boss-tag">账号权益</span>
+        <span class="boss-tag">升级VIP</span>
+      </header>
+      <aside class="boss-side-banner">
+        <span class="boss-tag">推荐牛人</span>
+        <span class="boss-tag">职位管理</span>
+        <span class="boss-tag">意向沟通</span>
+        <span class="boss-tag">互动</span>
+        <span class="boss-tag">道具</span>
+        <span class="boss-tag">更多</span>
+        <span class="boss-tag">BOSS直聘客户版</span>
+        <span class="boss-tag">立即下载</span>
+      </aside>
+      <section class="candidate-popover-without-known-root">
+        <span class="boss-tag">系统运维</span>
+        <span class="boss-tag">计算机专业</span>
+        <span class="boss-tag">SQL优化</span>
+        <span class="boss-tag">MySQL</span>
+        <span class="boss-tag">微服务开发</span>
+      </section>`;
+    markTreeVisible(document);
+
+    expect(extractBossVisibleSkillTags()).toEqual([
+      '系统运维',
+      'SQL优化',
+      'MySQL',
+      '微服务开发',
+    ]);
+  });
+
+  it('falls back to broad technical keywords when no useful tags exist', () => {
+    document.body.innerHTML = `
+      <header class="boss-top-banner">
+        <span class="boss-tag">招聘规范</span>
+        <span class="boss-tag">我的客服</span>
+      </header>
+      <main class="unknown-candidate-layout">
+        <h1>候选人正文</h1>
+        <p>基于 Redis SET NX + EX 实现 Kafka 消费幂等控制。</p>
+        <p>使用 Redis ZSet、ClickHouse 优化 IoT 数据处理链路。</p>
+        <p>Java · 产业金融部门</p>
+      </main>`;
+    markTreeVisible(document);
+
+    expect(extractBossVisibleSkillTags()).toEqual([
+      'Redis',
+      'Kafka',
+      'ClickHouse',
+      'IoT',
+      'Java',
+    ]);
+  });
+
   it('extracts grouped text skills from the resume header block', () => {
     document.body.innerHTML = `
       <section class="dialog-lib-resume">

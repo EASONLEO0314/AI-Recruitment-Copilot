@@ -57,7 +57,7 @@ export function extractBossVisibleSkillTags(): string[] {
     '[class]',
   ].join(', ');
   const tagClassPattern = /(?:^|[-_])(?:tags?|skills?|label|badge)(?:$|[-_])/i;
-  const nonSkillPattern = /^(?:优势|亮点|标签|技能|工作|教育|项目|简历|候选人|推荐|未读|已读|查看|联系|沟通|打招呼|聊一聊|感兴趣|不合适|举报|反馈|当前岗位|字段覆盖率|演示数据|匹配度|非常匹配.*|建议联系.*|招聘规范|我的客服|面试|招聘数据|账号权益|升级VIP|首充礼|筛选|最近关注|职位管理|牛人管理|工具箱|客户端|立即下载|新|本科|硕士|博士|大专|高中|中专|学历|男|女|活跃|今日活跃|刚刚活跃|在线|离线|在职.*|离职.*|随时到岗|应届生|.+专业|.+工程师|.+经理|.+主管|.+负责人|.+顾问|.+专家|.+架构师|.+(?:大学|学院|学校|中学|职校|技校)|\d+|\d+\s*(?:个)?月|\d+\s*(?:年|岁)(?:经验|应届生)?|\d+\s*[-~]\s*\d+\s*年(?:经验)?|\d+\s*[-~]\s*\d+\s*[kK]?)$/;
+  const nonSkillPattern = /^(?:优势|亮点|标签|技能|工作|教育|项目|简历|候选人|推荐|推荐牛人|搜索|未读|已读|查看|联系|沟通|意向沟通|互动|打招呼|聊一聊|感兴趣|不合适|举报|反馈|收藏|转发|当前岗位|字段覆盖率|演示数据|匹配度|非常匹配.*|建议联系.*|招聘规范|我的客服|面试|招聘数据|账号权益|升级VIP|首充礼|筛选|最近关注|职位管理|牛人管理|工具箱|道具|更多|客户端|BOSS直聘|BOSS直聘客户版|立即下载|新|本科|硕士|博士|大专|高中|中专|学历|男|女|活跃|今日活跃|刚刚活跃|在线|离线|在职.*|离职.*|随时到岗|应届生|.+专业|.+工程师|.+经理|.+主管|.+负责人|.+顾问|.+专家|.+架构师|.+(?:大学|学院|学校|中学|职校|技校)|\d+|\d+\s*(?:个)?月|\d+\s*(?:年|岁)(?:经验|应届生)?|\d+\s*[-~]\s*\d+\s*年(?:经验)?|\d+\s*[-~]\s*\d+\s*[kK]?)$/;
   const noisyTextPattern = /\d+\s*[-~]\s*\d+\s*[kK]/i;
   const dateLikePattern = /^(?:(?:19|20)?\d{2}(?:[./-]\d{1,2})?|\d{1,2})\s*[-–—至到]\s*(?:至今|现在|当前|(?:19|20)\d{2}(?:[./-]\d{1,2})?)$/;
   const sampleFormat = /^[\p{Script=Han}A-Za-z0-9#+. _/-]{1,40}$/u;
@@ -307,9 +307,9 @@ export function extractBossVisibleSkillTags(): string[] {
     }
   };
 
-  const addTechnicalKeywordSkills = (skills: Set<string>): void => {
+  const addTechnicalKeywordSkills = (skills: Set<string>, sourceText?: string): void => {
     const matches: Array<{ skill: string; index: number; order: number }> = [];
-    const text = preferredScanRoots()
+    const text = sourceText ?? preferredScanRoots()
       .map((root) => normalize(root.textContent, 10_000))
       .join(' ');
     technicalSkillPatterns.forEach(([skill, pattern], order) => {
@@ -327,6 +327,18 @@ export function extractBossVisibleSkillTags(): string[] {
           addSkill(skills, skill);
         }
       });
+  };
+
+  const addBroadTagSkills = (skills: Set<string>): void => {
+    for (const element of deepQuerySelectorAll(document, selector)) {
+      if (!isVisible(element) || !isTagElement(element) || hasNestedTagElement(element)) {
+        continue;
+      }
+      addSkill(skills, normalize(element.textContent, 80));
+      if (skills.size >= maxSkills) {
+        break;
+      }
+    }
   };
 
   const values = new Set<string>();
@@ -348,7 +360,10 @@ export function extractBossVisibleSkillTags(): string[] {
     addTextBlockSkills(values);
   }
   if (values.size === 0) {
-    addTechnicalKeywordSkills(values);
+    addBroadTagSkills(values);
+  }
+  if (values.size === 0) {
+    addTechnicalKeywordSkills(values, normalize(document.body?.textContent ?? '', 10_000));
   }
 
   return Array.from(values).slice(0, maxSkills);
