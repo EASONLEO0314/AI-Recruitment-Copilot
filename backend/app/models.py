@@ -1,6 +1,6 @@
 """Typed API contracts for the M1 demo slice."""
 
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,6 +16,18 @@ class DemoAssessmentRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     candidate_label: str = Field(default="张同学", min_length=1, max_length=80)
+
+
+class OcrSkillsRequest(BaseModel):
+    image_data_url: str = Field(min_length=32, max_length=6_000_000)
+
+
+class OcrSkillsResponse(BaseModel):
+    request_id: str
+    available: bool
+    engine: Optional[str] = None
+    skills: list[str] = Field(default_factory=list, max_length=20)
+    warning: Optional[Literal["ocr-engine-unavailable", "ocr-failed", "no-skills-found"]] = None
 
 
 class DimensionResult(BaseModel):

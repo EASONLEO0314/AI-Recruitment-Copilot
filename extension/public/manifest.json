@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "A local-first recruitment copilot demo for candidate review.",
   "permissions": [
+    "activeTab",
     "clipboardWrite",
     "storage",
     "scripting"

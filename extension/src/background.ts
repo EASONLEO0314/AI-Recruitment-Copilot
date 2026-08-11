@@ -31,6 +31,7 @@ type ResumeScriptExecutor = (details: {
 }) => Promise<ResumeScriptResult[]>;
 
 type ResumeReader = (tabId: number) => Promise<ResumeReadResponse>;
+type OcrSkillsReader = (tabId: number) => Promise<string[]>;
 
 
 function failure(code: ApiErrorCode, message: string): ApiRuntimeResponse<never> {
@@ -104,6 +105,137 @@ const executeResumeScript: ResumeScriptExecutor = async (details) => (
 );
 
 
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    globalThis.setTimeout(resolve, milliseconds);
+  });
+}
+
+
+async function setPanelHidden(tabId: number, hidden: boolean): Promise<void> {
+  if (typeof chrome === 'undefined' || !chrome.tabs?.sendMessage) {
+    return;
+  }
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'ARC_PANEL_VISIBILITY', hidden });
+  } catch {
+    // The screenshot fallback should continue even if the panel message is unavailable.
+  }
+}
+
+
+async function captureVisiblePng(): Promise<string | null> {
+  if (typeof chrome === 'undefined' || !chrome.tabs?.captureVisibleTab) {
+    return null;
+  }
+  return new Promise((resolve) => {
+    try {
+      chrome.tabs.captureVisibleTab({ format: 'png' }, (dataUrl) => {
+        resolve(chrome.runtime.lastError ? null : dataUrl ?? null);
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  const reader = new FileReader();
+  return new Promise((resolve, reject) => {
+    reader.addEventListener('load', () => {
+      resolve(String(reader.result));
+    });
+    reader.addEventListener('error', () => reject(reader.error));
+    reader.readAsDataURL(blob);
+  });
+}
+
+
+async function cropVisibleTop(dataUrl: string): Promise<string> {
+  if (typeof createImageBitmap !== 'function' || typeof OffscreenCanvas === 'undefined') {
+    return dataUrl;
+  }
+  try {
+    const blob = await (await fetch(dataUrl)).blob();
+    const bitmap = await createImageBitmap(blob);
+    const height = Math.max(1, Math.floor(bitmap.height * 0.45));
+    const canvas = new OffscreenCanvas(bitmap.width, height);
+    const context = canvas.getContext('2d');
+    if (!context) {
+      return dataUrl;
+    }
+    context.drawImage(bitmap, 0, 0, bitmap.width, height, 0, 0, bitmap.width, height);
+    return await blobToDataUrl(await canvas.convertToBlob({ type: 'image/png' }));
+  } catch {
+    return dataUrl;
+  }
+}
+
+
+async function fetchOcrSkills(
+  imageDataUrl: string,
+  fetcher: Fetcher = fetch,
+): Promise<string[]> {
+  try {
+    const response = await fetcher(`${API_BASE_URL}/v1/ocr/skills`, {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ image_data_url: imageDataUrl }),
+    });
+    if (!response.ok) {
+      return [];
+    }
+    const payload: unknown = await response.json();
+    if (!isRecord(payload)
+      || payload.available !== true
+      || !Array.isArray(payload.skills)) {
+      return [];
+    }
+    return payload.skills
+      .filter((skill): skill is string => typeof skill === 'string' && skill.length <= 80)
+      .slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+
+async function readVisibleTopOcrSkills(tabId: number): Promise<string[]> {
+  await setPanelHidden(tabId, true);
+  try {
+    await delay(120);
+    const screenshot = await captureVisiblePng();
+    if (!screenshot) {
+      return [];
+    }
+    return await fetchOcrSkills(await cropVisibleTop(screenshot));
+  } finally {
+    await setPanelHidden(tabId, false);
+  }
+}
+
+
+function withOcrSkills(snapshot: ParserSnapshot, skills: string[]): ParserSnapshot {
+  if (!snapshot.profile || snapshot.profile.skills.length > 0 || skills.length === 0) {
+    return snapshot;
+  }
+  const merged = buildProfileSnapshot(
+    snapshot.page_kind,
+    { ...snapshot.profile, skills },
+    new Date(snapshot.captured_at),
+  );
+  return {
+    ...merged,
+    parser_version: snapshot.parser_version,
+    warnings: [...snapshot.warnings, 'ocr-skills:visible-top'].slice(0, 180),
+  };
+}
+
+
 function profileScore(
   probe: Extract<VueResumeProfileFrameProbe, { status: 'ready' }>,
 ): number {
@@ -166,6 +298,7 @@ export async function handleResumeRead(
   tabId: number,
   executor: ResumeScriptExecutor = executeResumeScript,
   now: () => Date = () => new Date(),
+  ocrReader: OcrSkillsReader = readVisibleTopOcrSkills,
 ): Promise<ResumeReadResponse> {
   try {
     const results = await executor({
@@ -191,9 +324,10 @@ export async function handleResumeRead(
       if (ready[0].capability.allowed_keys.length === 0) {
         return { ok: false, error: 'vue-schema-unsupported' };
       }
+      const snapshot = capabilitySnapshot(ready[0], now().toISOString());
       return {
         ok: true,
-        snapshot: capabilitySnapshot(ready[0], now().toISOString()),
+        snapshot: withOcrSkills(snapshot, await ocrReader(tabId)),
       };
     }
 

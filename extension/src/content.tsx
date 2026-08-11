@@ -11,8 +11,23 @@ export interface ContentBootstrapOptions {
 
 
 export function bootstrapContentScript(options: ContentBootstrapOptions): CoordinatorHandle {
+  let host: HTMLElement | undefined;
   if (options.isTopFrame) {
-    mountCopilot(options.targetDocument);
+    host = mountCopilot(options.targetDocument);
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+        if (typeof message === 'object'
+          && message !== null
+          && (message as { type?: unknown }).type === 'ARC_PANEL_VISIBILITY') {
+          host?.style.setProperty(
+            'display',
+            (message as { hidden?: unknown }).hidden === true ? 'none' : '',
+          );
+          sendResponse({ ok: true });
+        }
+        return false;
+      });
+    }
   }
 
   return startParserCoordinator(options);

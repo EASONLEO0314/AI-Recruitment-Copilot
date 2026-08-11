@@ -70,6 +70,37 @@ describe('content script bootstrap', () => {
     expect(handle.stop).toBe(coordinatorMocks.stop);
   });
 
+  it('temporarily hides the panel for explicit OCR screenshots', () => {
+    let listener: ((message: unknown, sender: unknown, sendResponse: (response: unknown) => void) => boolean) | undefined;
+    vi.stubGlobal('chrome', {
+      runtime: {
+        onMessage: {
+          addListener: vi.fn((nextListener) => {
+            listener = nextListener;
+          }),
+        },
+      },
+    });
+
+    bootstrapContentScript({
+      targetDocument: document,
+      currentUrl: 'https://www.zhipin.com/web/geek/job',
+      isTopFrame: true,
+    });
+    const host = document.querySelector('#ai-recruitment-copilot-root') as HTMLElement;
+    const sendResponse = vi.fn();
+
+    expect(listener?.({ type: 'ARC_PANEL_VISIBILITY', hidden: true }, {}, sendResponse))
+      .toBe(false);
+    expect(host.style.display).toBe('none');
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true });
+
+    listener?.({ type: 'ARC_PANEL_VISIBILITY', hidden: false }, {}, sendResponse);
+    expect(host.style.display).toBe('');
+
+    vi.unstubAllGlobals();
+  });
+
   it('keeps the existing duplicate-mount protection', async () => {
     const firstHost = mountCopilot(document);
     const secondHost = mountCopilot(document);

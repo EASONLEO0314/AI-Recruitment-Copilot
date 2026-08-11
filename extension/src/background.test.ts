@@ -12,6 +12,7 @@ type ResumeReadHandler = (
   tabId: number,
   executeScript: (details: unknown) => Promise<Array<{ frameId: number; result?: unknown }>>,
   now: () => Date,
+  ocrReader?: (tabId: number) => Promise<string[]>,
 ) => Promise<unknown>;
 
 
@@ -406,6 +407,53 @@ describe('MAIN-world resume read handler', () => {
     expect(JSON.stringify(response)).toContain('候选人乙');
     expect(JSON.stringify(response)).not.toContain('稀疏候选人');
     expect(JSON.stringify(response)).not.toContain('lib-resume-anonymous');
+  });
+
+  it('merges local OCR skills when the Vue profile has no skills', async () => {
+    const executeScript = vi.fn().mockResolvedValue([{
+      frameId: 4,
+      result: {
+        status: 'ready',
+        capability: {
+          root: 'lib-resume-recommend',
+          vue_generation: 'vue2',
+          resume_object: 'resumeInfo',
+          allowed_keys: ['geekBaseInfo'],
+          array_lengths: {},
+        },
+        schema: [{ key: 'geekBaseInfo', type: 'object' }],
+        nested_schema: [],
+        profile: {
+          display_name: '候选人 OCR',
+          education: [],
+          work_experiences: [],
+          project_experiences: [],
+          skills: [],
+        },
+      },
+    }]);
+    const ocrReader = vi.fn().mockResolvedValue(['Python', 'MySQL']);
+
+    const response = await resumeReadHandler()?.(
+      17,
+      executeScript,
+      () => new Date('2026-08-07T02:00:00.000Z'),
+      ocrReader,
+    );
+
+    expect(ocrReader).toHaveBeenCalledWith(17);
+    expect(response).toMatchObject({
+      ok: true,
+      snapshot: {
+        parser_version: 'boss-vue-v1',
+        profile: {
+          display_name: '候选人 OCR',
+          skills: ['Python', 'MySQL'],
+        },
+        present_fields: ['skills', 'display_name'],
+        warnings: expect.arrayContaining(['ocr-skills:visible-top']),
+      },
+    });
   });
 
   it('ignores an invalid frame when another frame returns a valid capability', async () => {

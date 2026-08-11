@@ -6,7 +6,14 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.demo import build_demo_assessment
-from backend.app.models import AssessmentResponse, DemoAssessmentRequest, HealthResponse
+from backend.app.models import (
+    AssessmentResponse,
+    DemoAssessmentRequest,
+    HealthResponse,
+    OcrSkillsRequest,
+    OcrSkillsResponse,
+)
+from backend.app.ocr import ocr_skills_from_data_url
 
 
 app = FastAPI(
@@ -46,3 +53,24 @@ async def demo_assessment(
     request: Request,
 ) -> AssessmentResponse:
     return build_demo_assessment(payload.candidate_label, request.state.request_id)
+
+
+@app.post("/v1/ocr/skills", response_model=OcrSkillsResponse)
+async def ocr_skills(
+    payload: OcrSkillsRequest,
+    request: Request,
+) -> OcrSkillsResponse:
+    available, skills = ocr_skills_from_data_url(payload.image_data_url)
+    if not available:
+        return OcrSkillsResponse(
+            request_id=request.state.request_id,
+            available=False,
+            warning="ocr-engine-unavailable",
+        )
+    return OcrSkillsResponse(
+        request_id=request.state.request_id,
+        available=True,
+        engine="tesseract",
+        skills=skills,
+        warning=None if skills else "no-skills-found",
+    )
