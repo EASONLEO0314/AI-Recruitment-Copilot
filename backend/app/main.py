@@ -2,14 +2,21 @@
 
 from uuid import uuid4
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.demo import build_demo_assessment
+from backend.app.knowledge_base import (
+    load_default_knowledge_base,
+    search_knowledge_base,
+    summarize_knowledge_base,
+)
 from backend.app.models import (
     AssessmentResponse,
     DemoAssessmentRequest,
     HealthResponse,
+    KnowledgeSearchResponse,
+    KnowledgeSummaryResponse,
     OcrSkillsRequest,
     OcrSkillsResponse,
 )
@@ -74,3 +81,19 @@ async def ocr_skills(
         skills=skills,
         warning=None if skills else "no-skills-found",
     )
+
+
+@app.get("/v1/knowledge/summary", response_model=KnowledgeSummaryResponse)
+async def knowledge_summary(request: Request) -> KnowledgeSummaryResponse:
+    summary = summarize_knowledge_base(load_default_knowledge_base())
+    return KnowledgeSummaryResponse(request_id=request.state.request_id, **summary)
+
+
+@app.get("/v1/knowledge/search", response_model=KnowledgeSearchResponse)
+async def knowledge_search(
+    request: Request,
+    query: str = Query(min_length=1, max_length=120),
+    limit: int = Query(default=5, ge=1, le=20),
+) -> KnowledgeSearchResponse:
+    result = search_knowledge_base(query, limit=limit)
+    return KnowledgeSearchResponse(request_id=request.state.request_id, **result)

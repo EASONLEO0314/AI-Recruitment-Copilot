@@ -75,6 +75,29 @@ npm.cmd run start:backend
 
 服务只监听 `127.0.0.1:8765`，不会暴露到局域网。
 
+## 岗位知识库
+
+本地后端支持从 `招聘信息表.xlsx` 生成岗位知识库。生成后可通过以下接口读取：
+
+- 摘要接口：<http://127.0.0.1:8765/v1/knowledge/summary>
+- 检索接口：<http://127.0.0.1:8765/v1/knowledge/search?query=AI4S%20RAG%20Python&limit=5>
+
+当前实现是确定性的“小型检索库”：它把岗位 JD、岗位关键词、核心产出、部门和项目等字段整理成本地 JSON 文档，并抽取标准化技能/业务概念，便于后续评分与候选人技能归一化。它还不是向量库；后续如需升级为 RAG，可以直接使用生成文件中的 `documents` 作为 embedding 输入。
+
+更新岗位表后，可在项目根目录重新生成：
+
+```powershell
+scripts\python.cmd scripts\build_job_knowledge_base.py C:\Users\你的用户名\Documents\招聘信息表.xlsx
+```
+
+macOS 本机开发可直接使用：
+
+```bash
+.venv/bin/python scripts/build_job_knowledge_base.py /Users/eason/Documents/招聘信息表.xlsx
+```
+
+生成结果写入 `backend/app/data/job_knowledge_base.json`。该文件保留在本机，不提交到 Git；生成文件不包含直属负责人、招聘负责人和招聘成本记录等内部字段。
+
 ## 构建并加载 Chrome 扩展
 
 另开一个 PowerShell 窗口，在项目根目录运行：

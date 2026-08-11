@@ -30,6 +30,49 @@ class OcrSkillsResponse(BaseModel):
     warning: Optional[Literal["ocr-engine-unavailable", "ocr-failed", "no-skills-found"]] = None
 
 
+class KnowledgeSource(BaseModel):
+    file_name: Optional[str] = None
+    row_count: int = 0
+    job_count: int = 0
+
+
+class KnowledgeConcept(BaseModel):
+    canonical: str
+    category: str
+    aliases: list[str] = Field(default_factory=list)
+    frequency: int = Field(ge=0)
+    job_ids: list[str] = Field(default_factory=list)
+
+
+class KnowledgeSummaryResponse(BaseModel):
+    request_id: str
+    schema_version: int
+    generated_at: Optional[str] = None
+    source: KnowledgeSource
+    total_jobs: int = Field(ge=0)
+    total_concepts: int = Field(ge=0)
+    top_concepts: list[KnowledgeConcept] = Field(default_factory=list)
+
+
+class KnowledgeJobHit(BaseModel):
+    job_id: str
+    title: str
+    department: Optional[str] = None
+    project: Optional[str] = None
+    status: Optional[str] = None
+    score: int = Field(ge=0)
+    matched_concepts: list[str] = Field(default_factory=list)
+    required_keywords: list[str] = Field(default_factory=list)
+    snippet: str = ""
+
+
+class KnowledgeSearchResponse(BaseModel):
+    request_id: str
+    query: str
+    concepts: list[KnowledgeConcept] = Field(default_factory=list)
+    jobs: list[KnowledgeJobHit] = Field(default_factory=list)
+
+
 class DimensionResult(BaseModel):
     key: str
     name: str
