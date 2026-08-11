@@ -45,8 +45,15 @@ export interface VueResumeSchemaField {
   array_length?: number;
 }
 
+export type VueResumeNestedSchemaContainer =
+  | 'geekDetailInfo'
+  | 'geekWorkExpItem'
+  | 'geekProjExpItem'
+  | 'geekEduExpItem'
+  | 'geekBaseInfo';
+
 export interface VueResumeNestedSchemaField extends VueResumeSchemaField {
-  container: 'geekDetailInfo';
+  container: VueResumeNestedSchemaContainer;
 }
 
 
@@ -70,7 +77,16 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
   const maxElements = 500;
   const maxItems = 50;
   const maxSchemaFields = 40;
+  const maxNestedSchemaFields = 120;
+  const nestedSchemaContainers = [
+    'geekDetailInfo',
+    'geekWorkExpItem',
+    'geekProjExpItem',
+    'geekEduExpItem',
+    'geekBaseInfo',
+  ] as const;
   const schemaKeyFormat = /^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/;
+  const nestedSchemaKeyBlocklist = /phone|mobile|email|weixin|wechat|token|cookie|secret|private/i;
 
   const isRecord = (value: unknown): value is Record<string, unknown> => (
     typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -288,15 +304,37 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
     })
   );
 
+  const readSkill = (value: unknown): string | undefined => (
+    normalize(value)
+      ?? readString(value, 'name')
+      ?? readString(value, 'skillName')
+      ?? readString(value, 'tagName')
+  );
+
+  const addSkill = (skills: Set<string>, value: string | undefined): void => {
+    if (value) {
+      skills.add(value);
+    }
+  };
+
   const mapSkills = (value: unknown): string[] => {
     const skills = new Set<string>();
     for (const item of boundedArray(value)) {
-      const skill = normalize(item) ?? readString(item, 'name');
-      if (skill) {
-        skills.add(skill);
-      }
+      addSkill(skills, readSkill(item));
     }
     return Array.from(skills).slice(0, maxItems);
+  };
+
+  const delimitedSkills = (value: unknown): string[] => {
+    const text = normalize(value, 500);
+    if (!text) {
+      return [];
+    }
+    const values = text
+      .split(/[、,，;；\n\r\t|/]+/)
+      .map((item) => normalize(item, 80))
+      .filter((item): item is string => Boolean(item));
+    return values.length > 1 ? Array.from(new Set(values)).slice(0, maxItems) : [];
   };
 
   const experienceYears = (value: unknown): number | undefined => {
@@ -315,6 +353,68 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
     return Number.isInteger(parsed) && parsed >= 0 && parsed <= 80 ? parsed : undefined;
   };
 
+  const experienceYearKeys = [
+    'workYear',
+    'workYears',
+    'workYearDesc',
+    'workYearName',
+    'workYearStr',
+    'workExpYear',
+    'workExpYearDesc',
+    'workExpYearName',
+    'experienceYear',
+    'experienceYears',
+    'experienceYearDesc',
+    'expYear',
+  ] as const;
+
+  const firstExperienceYears = (value: unknown): number | undefined => {
+    for (const key of experienceYearKeys) {
+      const years = experienceYears(safeRead(value, key));
+      if (years !== undefined) {
+        return years;
+      }
+    }
+    return undefined;
+  };
+
+  const parseYearMonth = (value: unknown, fallbackToNow: boolean): number | undefined => {
+    const text = normalize(value, 80);
+    if (!text) {
+      return undefined;
+    }
+    if (fallbackToNow && /至今|现在|当前|present/i.test(text)) {
+      const now = new Date();
+      return (now.getFullYear() * 12) + now.getMonth();
+    }
+    const match = text.match(/(19|20)\d{2}(?:[./-]?\s*(0?[1-9]|1[0-2]))?/);
+    if (!match) {
+      return undefined;
+    }
+    const year = Number(match[0].slice(0, 4));
+    const month = match[2] ? Number(match[2]) : 1;
+    return (year * 12) + (month - 1);
+  };
+
+  const deriveExperienceYearsFromWork = (value: unknown): number | undefined => {
+    let earliestStart: number | undefined;
+    let latestEnd: number | undefined;
+    for (const item of boundedArray(value)) {
+      const start = parseYearMonth(safeRead(item, 'startYearMonStr'), false);
+      if (start === undefined) {
+        continue;
+      }
+      const end = parseYearMonth(safeRead(item, 'endYearMonStr'), true) ?? start;
+      earliestStart = earliestStart === undefined ? start : Math.min(earliestStart, start);
+      latestEnd = latestEnd === undefined ? end : Math.max(latestEnd, end);
+    }
+    if (earliestStart === undefined || latestEnd === undefined || latestEnd < earliestStart) {
+      return undefined;
+    }
+    const years = Math.floor((latestEnd - earliestStart + 1) / 12);
+    return years >= 0 && years <= 80 ? years : undefined;
+  };
+
   const mapProfile = (resumeInfo: Record<string, unknown>): CandidateProfile => {
     const profile: CandidateProfile = {
       education: mapEducation(safeRead(resumeInfo, 'geekEduExpList')),
@@ -326,7 +426,8 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
     const displayName = readString(baseInfo, 'name');
     const currentTitle = readString(baseInfo, 'positionName');
     const location = readString(baseInfo, 'cityName');
-    const years = experienceYears(safeRead(baseInfo, 'workYear'));
+    const years = firstExperienceYears(baseInfo)
+      ?? deriveExperienceYearsFromWork(safeRead(resumeInfo, 'geekWorkExpList'));
     const expectInfo = safeRead(baseInfo, 'expectInfo');
     const expectedPosition = readString(expectInfo, 'position');
     const expectedCity = readString(expectInfo, 'cityName');
@@ -339,6 +440,50 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
     if (expectedCity) profile.expected_city = expectedCity;
     if (summary) profile.summary = summary;
     return profile;
+  };
+
+  const detailSkillListKeys = [
+    'skillTagList',
+    'geekSkillTagList',
+    'skillList',
+    'skillItems',
+  ] as const;
+
+  const detailSkillTextKeys = [
+    'professionalSkill',
+  ] as const;
+
+  const enrichProfileWithDetail = (
+    profile: CandidateProfile,
+    detail: unknown,
+  ): CandidateProfile => {
+    if (!isRecord(detail)) {
+      return profile;
+    }
+    const enriched: CandidateProfile = { ...profile };
+    if (enriched.skills.length === 0) {
+      const skills = new Set<string>();
+      for (const key of detailSkillListKeys) {
+        for (const skill of mapSkills(safeRead(detail, key))) {
+          skills.add(skill);
+        }
+      }
+      for (const key of detailSkillTextKeys) {
+        for (const skill of delimitedSkills(safeRead(detail, key))) {
+          skills.add(skill);
+        }
+      }
+      if (skills.size > 0) {
+        enriched.skills = Array.from(skills).slice(0, maxItems);
+      }
+    }
+    if (enriched.experience_years === undefined) {
+      const years = firstExperienceYears(detail);
+      if (years !== undefined) {
+        enriched.experience_years = years;
+      }
+    }
+    return enriched;
   };
 
   const capabilityFor = (
@@ -427,17 +572,45 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
     return schema;
   };
 
-  const nestedSchemaFor = (
+  const nestedContainersFor = (
     resumeInfo: Record<string, unknown>,
-  ): VueResumeNestedSchemaField[] => {
-    const detail = safeRead(resumeInfo, 'geekDetailInfo');
-    if (!isRecord(detail)) {
-      return [];
-    }
-    return schemaForRecord(detail).map((field) => ({
-      container: 'geekDetailInfo',
-      ...field,
+  ): Array<{ container: VueResumeNestedSchemaContainer; value: unknown }> => {
+    const firstArrayItem = (key: string): unknown => {
+      const items = boundedArray(safeRead(resumeInfo, key));
+      return items[0];
+    };
+    const nestedValues: Record<VueResumeNestedSchemaContainer, unknown> = {
+      geekDetailInfo: safeRead(resumeInfo, 'geekDetailInfo'),
+      geekWorkExpItem: firstArrayItem('geekWorkExpList'),
+      geekProjExpItem: firstArrayItem('geekProjExpList'),
+      geekEduExpItem: firstArrayItem('geekEduExpList'),
+      geekBaseInfo: safeRead(resumeInfo, 'geekBaseInfo'),
+    };
+    return nestedSchemaContainers.map((container) => ({
+      container,
+      value: nestedValues[container],
     }));
+  };
+
+  const nestedSchemaFor = (
+    containers: Array<{ container: VueResumeNestedSchemaContainer; value: unknown }>,
+  ): VueResumeNestedSchemaField[] => {
+    const fields: VueResumeNestedSchemaField[] = [];
+    for (const { container, value } of containers) {
+      if (!isRecord(value)) {
+        continue;
+      }
+      for (const field of schemaForRecord(value)) {
+        if (fields.length >= maxNestedSchemaFields) {
+          return fields;
+        }
+        if (nestedSchemaKeyBlocklist.test(field.key)) {
+          continue;
+        }
+        fields.push({ container, ...field });
+      }
+    }
+    return fields;
   };
 
   const profileScore = (profile: CandidateProfile): number => {
@@ -487,9 +660,13 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
 
   ready.sort((left, right) => profileScore(right.probe.profile) - profileScore(left.probe.profile));
   if (ready.length > 0) {
+    const selected = ready[0];
+    const nestedContainers = nestedContainersFor(selected.resumeInfo);
+    const detail = nestedContainers.find(({ container }) => container === 'geekDetailInfo')?.value;
     return {
-      ...ready[0].probe,
-      nested_schema: nestedSchemaFor(ready[0].resumeInfo),
+      ...selected.probe,
+      profile: enrichProfileWithDetail(selected.probe.profile, detail),
+      nested_schema: nestedSchemaFor(nestedContainers),
     };
   }
   if (firstVueHandle) {
@@ -524,6 +701,14 @@ const SCHEMA_TYPES: readonly VueResumeSchemaType[] = [
   'other',
 ];
 
+const NESTED_SCHEMA_CONTAINERS: readonly VueResumeNestedSchemaContainer[] = [
+  'geekDetailInfo',
+  'geekWorkExpItem',
+  'geekProjExpItem',
+  'geekEduExpItem',
+  'geekBaseInfo',
+];
+
 
 function isVueResumeSchema(value: unknown): value is VueResumeSchemaField[] {
   if (!Array.isArray(value) || value.length > 40) {
@@ -556,16 +741,16 @@ function isVueResumeSchema(value: unknown): value is VueResumeSchemaField[] {
 
 
 function isVueResumeNestedSchema(value: unknown): value is VueResumeNestedSchemaField[] {
-  if (!Array.isArray(value) || value.length > 40) {
+  if (!Array.isArray(value) || value.length > 120) {
     return false;
   }
   const seen = new Set<string>();
   for (const field of value) {
     if (!isRecord(field)
       || !hasOnlyKeys(field, ['container', 'key', 'type', 'array_length'])
-      || field.container !== 'geekDetailInfo'
+      || !NESTED_SCHEMA_CONTAINERS.includes(field.container as VueResumeNestedSchemaContainer)
       || typeof field.key !== 'string'
-      || seen.has(field.key)) {
+      || seen.has(`${field.container}:${field.key}`)) {
       return false;
     }
     const schemaField = {
@@ -576,7 +761,7 @@ function isVueResumeNestedSchema(value: unknown): value is VueResumeNestedSchema
     if (!isVueResumeSchema([schemaField])) {
       return false;
     }
-    seen.add(field.key);
+    seen.add(`${field.container}:${field.key}`);
   }
   return true;
 }

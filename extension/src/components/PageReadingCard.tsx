@@ -106,7 +106,7 @@ const VUE_ARRAY_LABELS: Readonly<Record<string, string>> = {
 };
 
 const VUE_SCHEMA_WARNING = /^vue-schema:key=([A-Za-z_$][A-Za-z0-9_$]{0,63}):(array|object|string|number|boolean|null|undefined|other)(?::([0-9]|[1-4][0-9]|50))?$/;
-const VUE_NESTED_SCHEMA_WARNING = /^vue-nested-schema:container=(geekDetailInfo):key=([A-Za-z_$][A-Za-z0-9_$]{0,63}):(array|object|string|number|boolean|null|undefined|other)(?::([0-9]|[1-4][0-9]|50))?$/;
+const VUE_NESTED_SCHEMA_WARNING = /^vue-nested-schema:container=(geekDetailInfo|geekWorkExpItem|geekProjExpItem|geekEduExpItem|geekBaseInfo):key=([A-Za-z_$][A-Za-z0-9_$]{0,63}):(array|object|string|number|boolean|null|undefined|other)(?::([0-9]|[1-4][0-9]|50))?$/;
 
 const VUE_SCHEMA_TYPE_LABELS: Readonly<Record<string, string>> = {
   array: '数组',
@@ -467,11 +467,11 @@ function ResumeCapabilityStatus({
       label: VUE_SCHEMA_TYPE_LABELS[type],
       arrayLength,
     }];
-  }).slice(0, 40);
+  }).slice(0, 120);
   const seenNestedSchemaKeys = new Set<string>();
   const nestedSchema = snapshot.warnings.flatMap((warning) => {
     const match = warning.match(VUE_NESTED_SCHEMA_WARNING);
-    if (!match || seenNestedSchemaKeys.has(match[2])) {
+    if (!match || seenNestedSchemaKeys.has(`${match[1]}:${match[2]}`)) {
       return [];
     }
     const type = match[3];
@@ -480,13 +480,22 @@ function ResumeCapabilityStatus({
       || (type !== 'array' && arrayLength !== undefined)) {
       return [];
     }
-    seenNestedSchemaKeys.add(match[2]);
+    seenNestedSchemaKeys.add(`${match[1]}:${match[2]}`);
     return [{
+      container: match[1],
       key: match[2],
       label: VUE_SCHEMA_TYPE_LABELS[type],
       arrayLength,
     }];
   }).slice(0, 40);
+  const nestedSchemaGroups = Array.from(
+    nestedSchema.reduce((groups, field) => {
+      const values = groups.get(field.container) ?? [];
+      values.push(field);
+      groups.set(field.container, values);
+      return groups;
+    }, new Map<string, typeof nestedSchema>()),
+  );
 
   if (snapshot.parser_version !== 'boss-vue-v1' || !root || !generation || !hasResumeInfo) {
     return <strong>页面读取结果无效，已安全丢弃</strong>;
@@ -516,16 +525,20 @@ function ResumeCapabilityStatus({
           ))}
         </div>
       )}
-      {nestedSchema.length > 0 && (
-        <div className="arc-reading__topology" aria-label="Vue geekDetailInfo 下一层 schema">
-          <strong>geekDetailInfo 下一层字段（仅结构）</strong>
-          {nestedSchema.map(({ key, label, arrayLength }) => (
-            <span key={key}>
+      {nestedSchemaGroups.map(([container, fields]) => (
+        <div
+          className="arc-reading__topology"
+          aria-label={`Vue ${container} 下一层 schema`}
+          key={container}
+        >
+          <strong>{container} 下一层字段（仅结构）</strong>
+          {fields.map(({ key, label, arrayLength }) => (
+            <span key={`${container}:${key}`}>
               {key} · {label}{arrayLength === undefined ? '' : ` ${arrayLength}`}
             </span>
           ))}
         </div>
-      )}
+      ))}
       <small>仅显示字段名和数量，不包含候选人正文</small>
     </>
   );

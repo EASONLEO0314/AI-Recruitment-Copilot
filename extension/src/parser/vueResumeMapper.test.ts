@@ -180,6 +180,16 @@ describe('MAIN-world Vue resume profile mapper', () => {
           key: 'childAccessor',
           type: 'other',
         },
+        {
+          container: 'geekBaseInfo',
+          key: 'workYear',
+          type: 'string',
+        },
+        {
+          container: 'geekWorkExpItem',
+          key: 'positionName',
+          type: 'string',
+        },
       ]),
       profile: {
         display_name: '候选人甲',
@@ -237,6 +247,7 @@ describe('MAIN-world Vue resume profile mapper', () => {
     expect(serializedProfile).not.toContain('不得读取');
     expect(serializedSchema).not.toContain('不得读取');
     expect(serializedSchema).not.toContain('bad-key');
+    expect(serializedNestedSchema).not.toContain('privatePhone');
     expect(serializedNestedSchema).not.toContain('不得读取');
   });
 
@@ -276,9 +287,152 @@ describe('MAIN-world Vue resume profile mapper', () => {
     expect(result.capability.array_lengths.geekWorkExpList).toBe(50);
     expect(result.capability.array_lengths.skillTagList).toBe(50);
     expect(result.schema).toHaveLength(40);
-    expect(result.nested_schema).toHaveLength(40);
+    expect(result.nested_schema.length).toBeGreaterThan(40);
+    expect(result.nested_schema.length).toBeLessThanOrEqual(120);
     expect(JSON.stringify(result.schema)).not.toContain('不得读取');
     expect(JSON.stringify(result.nested_schema)).not.toContain('不得读取');
+  });
+
+  it('maps selected geekDetailInfo skill tags and baseInfo work-year aliases', () => {
+    const resumeInfo: Record<string, unknown> = {
+      geekBaseInfo: {
+        name: '候选人丁',
+        workYearDesc: '3年',
+      },
+      geekWorkExpList: [{ company: '示例公司' }],
+    };
+    Object.defineProperty(resumeInfo, 'geekDetailInfo', {
+      enumerable: true,
+      get: () => ({
+        skillTagList: [
+          { name: 'TypeScript' },
+          { skillName: 'Python' },
+          'SQL',
+          { tagName: 'TypeScript' },
+        ],
+      }),
+    });
+    mountResume(resumeInfo);
+
+    const result = extractBossVueResumeProfile();
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      profile: {
+        display_name: '候选人丁',
+        experience_years: 3,
+        skills: ['TypeScript', 'Python', 'SQL'],
+      },
+      nested_schema: expect.arrayContaining([
+        {
+          container: 'geekDetailInfo',
+          key: 'skillTagList',
+          type: 'array',
+          array_length: 4,
+        },
+      ]),
+    });
+  });
+
+  it('derives experience years from bounded work experience date ranges', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-11T00:00:00.000Z'));
+    const resumeInfo: Record<string, unknown> = {
+      geekBaseInfo: {
+        name: '候选人己',
+      },
+      geekWorkExpList: [
+        {
+          company: '示例公司甲',
+          startYearMonStr: '2021.07',
+          endYearMonStr: '至今',
+        },
+        {
+          company: '示例公司乙',
+          startYearMonStr: '2019.03',
+          endYearMonStr: '2021.06',
+        },
+      ],
+    };
+    mountResume(resumeInfo);
+
+    const result = extractBossVueResumeProfile();
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      profile: {
+        display_name: '候选人己',
+        experience_years: 7,
+      },
+      nested_schema: expect.arrayContaining([
+        {
+          container: 'geekWorkExpItem',
+          key: 'startYearMonStr',
+          type: 'string',
+        },
+        {
+          container: 'geekWorkExpItem',
+          key: 'endYearMonStr',
+          type: 'string',
+        },
+      ]),
+    });
+    vi.useRealTimers();
+  });
+
+  it('parses delimited professionalSkill text only after selecting the richest resume', () => {
+    document.body.innerHTML = `
+      <section class="lib-resume-recommend"></section>
+      <section class="lib-resume-anonymous"></section>
+    `;
+    const [sparseRoot, richRoot] = Array.from(document.querySelectorAll('section'));
+    markVisible(sparseRoot);
+    markVisible(richRoot);
+    let sparseDetailCalls = 0;
+    const sparseResumeInfo: Record<string, unknown> = {
+      geekBaseInfo: { name: '稀疏候选人' },
+    };
+    Object.defineProperty(sparseResumeInfo, 'geekDetailInfo', {
+      enumerable: true,
+      get: () => {
+        sparseDetailCalls += 1;
+        return { professionalSkill: '不得读取未选中候选人技能' };
+      },
+    });
+    let richDetailCalls = 0;
+    const richResumeInfo: Record<string, unknown> = {
+      geekBaseInfo: { name: '候选人戊' },
+      geekWorkExpList: [{ company: '示例公司' }],
+    };
+    Object.defineProperty(richResumeInfo, 'geekDetailInfo', {
+      enumerable: true,
+      get: () => {
+        richDetailCalls += 1;
+        return { professionalSkill: 'React、Node.js、PostgreSQL' };
+      },
+    });
+    attachProperty(sparseRoot, '__vue__', { resumeInfo: sparseResumeInfo });
+    attachProperty(richRoot, '__vue__', { resumeInfo: richResumeInfo });
+
+    const result = extractBossVueResumeProfile();
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      profile: {
+        display_name: '候选人戊',
+        skills: ['React', 'Node.js', 'PostgreSQL'],
+      },
+      nested_schema: expect.arrayContaining([
+        {
+          container: 'geekDetailInfo',
+          key: 'professionalSkill',
+          type: 'string',
+        },
+      ]),
+    });
+    expect(sparseDetailCalls).toBe(0);
+    expect(richDetailCalls).toBe(1);
+    expect(JSON.stringify(result)).not.toContain('不得读取未选中候选人技能');
   });
 
   it('ignores hidden stale roots and selects the richest bounded profile', () => {
@@ -337,11 +491,11 @@ describe('MAIN-world Vue resume profile mapper', () => {
         work_experiences: [{ company: '示例公司' }],
         education: [{ school: '示例大学' }],
       },
-      nested_schema: [{
+      nested_schema: expect.arrayContaining([{
         container: 'geekDetailInfo',
         key: 'selectedSkillField',
         type: 'string',
-      }],
+      }]),
     });
     expect(sparseDetailCalls).toBe(0);
     expect(richDetailCalls).toBe(1);
@@ -437,11 +591,27 @@ describe('Vue resume profile probe validation', () => {
     expect(isVueResumeProfileFrameProbe({
       ...valid,
       nested_schema: [{
-        container: 'geekQuestInfoVO',
+        container: 'unsafeContainer',
         key: 'privateField',
         type: 'string',
       }],
     })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      nested_schema: [{
+        container: 'geekBaseInfo',
+        key: 'workYearDesc',
+        type: 'string',
+      }],
+    })).toBe(true);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      nested_schema: [{
+        container: 'geekWorkExpItem',
+        key: 'startYearMonStr',
+        type: 'string',
+      }],
+    })).toBe(true);
     expect(isVueResumeProfileFrameProbe({
       ...valid,
       nested_schema: [
@@ -484,7 +654,7 @@ describe('Vue resume profile probe validation', () => {
     })).toBe(false);
     expect(isVueResumeProfileFrameProbe({
       ...valid,
-      nested_schema: Array.from({ length: 41 }, (_, index) => ({
+      nested_schema: Array.from({ length: 121 }, (_, index) => ({
         container: 'geekDetailInfo',
         key: `field${index}`,
         type: 'string',
