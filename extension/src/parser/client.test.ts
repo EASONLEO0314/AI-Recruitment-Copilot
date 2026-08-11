@@ -381,6 +381,47 @@ describe('candidate reading source composition', () => {
     });
   });
 
+  it('uses current DOM skills when Vue exposes an empty skillTagList', () => {
+    const dom = frameRelay(
+      4,
+      'recommend_frame',
+      'partial',
+      '2026-08-07T01:59:59.000Z',
+    );
+    dom.snapshot = buildProfileSnapshot('recommend_frame', {
+      display_name: '候选人甲',
+      education: [],
+      work_experiences: [],
+      project_experiences: [],
+      skills: ['Python', 'Docker'],
+    }, new Date('2026-08-07T01:59:59.000Z'));
+    const exactEmptySkills: ParserSnapshot = {
+      ...buildProfileSnapshot('recommend_frame', {
+        display_name: '候选人甲',
+        education: [{ school: '匿名大学' }],
+        work_experiences: [],
+        project_experiences: [],
+        skills: [],
+      }, new Date('2026-08-07T02:00:00.000Z')),
+      parser_version: 'boss-vue-v1',
+      warnings: [
+        'vue-capability:resume-object=resumeInfo',
+        'vue-capability:key=skillTagList',
+        'vue-capability:array=skillTagList:0',
+      ],
+    };
+
+    const reading = composeCandidateReading(
+      [dom],
+      { session_id: 'read-1', snapshot: exactEmptySkills },
+      'read-1',
+    );
+
+    expect(reading?.source).toBe('vue_exact');
+    expect(reading?.snapshot.profile?.skills).toEqual(['Python', 'Docker']);
+    expect(reading?.snapshot.present_fields).toContain('skills');
+  });
+
   it('does not merge a Vue snapshot from a different read session', () => {
     const dom = frameRelay(
       4,

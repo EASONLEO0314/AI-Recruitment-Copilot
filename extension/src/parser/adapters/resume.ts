@@ -43,6 +43,31 @@ const HEADING_SELECTORS = ['h1', 'h2', 'h3', '.section-title', '.title'];
 const WORK_HEADINGS = new Set(['工作经历', '工作经验']);
 const EDUCATION_HEADINGS = new Set(['教育经历', '教育背景']);
 const PROJECT_HEADINGS = new Set(['项目经历', '项目经验']);
+const SKILL_HEADING_PATTERN = /^(?:专业技能|技能标签|技能特长|个人技能|技能)$/;
+const SKILL_HEADING_PREFIX_PATTERN = /^(?:专业技能|技能标签|技能特长|个人技能|技能)\s*[:：\-—]?\s*/;
+const NON_SKILL_TOKEN_PATTERN = /^(?:工作经历|工作经验|教育经历|教育背景|项目经历|项目经验|求职意向|个人优势)$/;
+const SKILL_CONTAINER_ROOTS = [
+  SECTION_ROOTS,
+  '.skills',
+  '.skill-section',
+  '.skill-wrap',
+  '.tag-section',
+  '.ai-preference-content',
+].join(', ');
+const SKILL_TOKEN_SELECTORS = [
+  ':scope .skills .tag-item',
+  ':scope .skill-label',
+  ':scope .skill-tag',
+  ':scope .tags-wrap .tag-item',
+  ':scope .tag-item',
+  ':scope .label',
+  ':scope .tag',
+  ':scope .badge',
+  ':scope [class*="tag"]',
+  ':scope [class*="skill"]',
+  ':scope .ai-preference-content-option .title',
+  ':scope .ai-preference-content-option span',
+].join(', ');
 
 const workSelectors = {
   company: ['.company-name', '.company-name-wrap', '.company'],
@@ -210,6 +235,107 @@ function parseProjectSection(section: Element): ParsedSection<ProjectExperience>
 }
 
 
+function isSkillHeading(element: Element): boolean {
+  const text = visibleText(element, 80).replace(/\s+/g, '');
+  return SKILL_HEADING_PATTERN.test(text);
+}
+
+
+function isLikelySkillToken(value: string): boolean {
+  const text = normalizeText(value, 80);
+  return text.length > 0
+    && text.length <= 40
+    && !SKILL_HEADING_PATTERN.test(text.replace(/\s+/g, ''))
+    && !NON_SKILL_TOKEN_PATTERN.test(text.replace(/\s+/g, ''));
+}
+
+
+function addSkillText(values: Set<string>, text: string, splitWhitespace = false): void {
+  const normalized = normalizeText(text, 160)
+    .replace(SKILL_HEADING_PREFIX_PATTERN, '')
+    .replace(/^[:：\-—\s]+/, '');
+  if (!normalized) {
+    return;
+  }
+
+  const fragments = normalized
+    .split(/[、,，/|;；]+|\s{2,}/)
+    .map((part) => normalizeText(part, 80))
+    .filter(Boolean);
+  const candidates = splitWhitespace && fragments.length === 1
+    ? fragments[0].split(/\s+/).filter((part) => part.length > 0)
+    : fragments;
+
+  for (const candidate of candidates) {
+    if (isLikelySkillToken(candidate)) {
+      values.add(candidate);
+    }
+  }
+}
+
+
+function collectSkillTokens(container: Element, heading: Element): string[] {
+  const values = new Set<string>();
+  for (const element of Array.from(container.querySelectorAll(SKILL_TOKEN_SELECTORS))) {
+    if (element === heading || element.contains(heading) || isHidden(element)) {
+      continue;
+    }
+    addSkillText(values, visibleText(element, 80));
+  }
+
+  if (values.size === 0) {
+    for (const element of Array.from(container.children)) {
+      if (element === heading || element.contains(heading) || isHidden(element)) {
+        continue;
+      }
+      addSkillText(values, visibleText(element, 120), true);
+    }
+  }
+
+  return Array.from(values);
+}
+
+
+function nearbySkillContainers(heading: Element, root: Element): Element[] {
+  const containers: Element[] = [];
+  const closest = heading.closest(SKILL_CONTAINER_ROOTS);
+  if (closest && root.contains(closest) && !isHidden(closest)) {
+    return visibleText(closest, 1_201).length <= 1_200 ? [closest] : [];
+  }
+
+  let parent = heading.parentElement;
+  for (let depth = 0; parent && depth < 3; depth += 1) {
+    if (parent === root) {
+      break;
+    }
+    if (root.contains(parent) && !isHidden(parent)) {
+      containers.push(parent);
+    }
+    parent = parent.parentElement;
+  }
+
+  return [...new Set(containers)]
+    .filter((container) => visibleText(container, 1_201).length <= 1_200);
+}
+
+
+function skillTextsNearHeadings(root: Element): string[] {
+  const values = new Set<string>();
+  const elements = [root, ...Array.from(root.querySelectorAll('*')).slice(0, 500)];
+  const headings = elements.filter((element) => !isHidden(element) && isSkillHeading(element));
+
+  for (const heading of headings) {
+    for (const container of nearbySkillContainers(heading, root)) {
+      for (const skill of collectSkillTokens(container, heading)) {
+        values.add(skill);
+      }
+    }
+  }
+
+  return Array.from(values).slice(0, 50);
+}
+
+
 export function parseResumeRoot(
   root: Element,
   pageKind: 'recommend_frame' | 'resume_frame',
@@ -268,15 +394,8 @@ export function parseResumeRoot(
   const location = baseInfo[0] && !LOCATION_EXCLUSIONS.test(baseInfo[0])
     ? baseInfo[0]
     : undefined;
-
-  const profile: CandidateProfile = {
-    display_name: firstText(root, ['.resume-name', '.geek-name', '.name'], 80),
-    location,
-    experience_years: experienceYears,
-    education,
-    work_experiences: workExperiences,
-    project_experiences: projectExperiences,
-    skills: allTexts(
+  const skills = [
+    ...allTexts(
       root,
       [
         '.skills .tag-item',
@@ -286,6 +405,17 @@ export function parseResumeRoot(
       ],
       80,
     ),
+    ...skillTextsNearHeadings(root),
+  ];
+
+  const profile: CandidateProfile = {
+    display_name: firstText(root, ['.resume-name', '.geek-name', '.name'], 80),
+    location,
+    experience_years: experienceYears,
+    education,
+    work_experiences: workExperiences,
+    project_experiences: projectExperiences,
+    skills: [...new Set(skills)].slice(0, 50),
     summary: firstText(
       root,
       ['.candidate-advantage', '.self-description', '.geek-desc .content', '.geek-desc'],

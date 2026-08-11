@@ -226,7 +226,7 @@ function mergeProfile(
       domProfile?.project_experiences,
       'geekProjExpList',
     ),
-    skills: preferredArray(vueProfile.skills, domProfile?.skills, 'skillTagList'),
+    skills: vueProfile.skills.length > 0 ? vueProfile.skills : domProfile?.skills ?? [],
     display_name: vueProfile.display_name ?? domProfile?.display_name,
     current_title: vueProfile.current_title ?? domProfile?.current_title,
     location: vueProfile.location ?? domProfile?.location,

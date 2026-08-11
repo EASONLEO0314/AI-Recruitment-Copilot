@@ -94,6 +94,32 @@ describe('resume frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('reads visible skills from a skill heading neighborhood', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="resume-content">
+        <h1 class="resume-name">候选人技能</h1>
+        <section class="resume-simple-box">
+          <div class="title">专业技能</div>
+          <div class="ai-preference-content">
+            <div class="ai-preference-content-option"><span class="title">TypeScript</span></div>
+            <div class="ai-preference-content-option"><span class="title">React</span></div>
+            <div class="ai-preference-content-option"><span class="title">Node.js</span></div>
+            <div class="ai-preference-content-option"><span class="title">Spring Boot</span></div>
+          </div>
+        </section>
+        <section class="resume-simple-box">
+          <div class="title">项目经历</div>
+          <div class="ai-preference-content-option"><span class="title">不应作为技能</span></div>
+        </section>
+      </main>`);
+
+    const snapshot = parseResumeFrame(document, capturedAt);
+
+    expect(snapshot.profile?.skills).toEqual(['TypeScript', 'React', 'Node.js', 'Spring Boot']);
+    expect(JSON.stringify(snapshot)).not.toContain('不应作为技能');
+    expectNoPageOperations();
+  });
+
   it('returns unsupported when no recognized resume root exists', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="unrelated-page">
