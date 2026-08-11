@@ -249,47 +249,49 @@ describe('background runtime listener', () => {
 
 describe('MAIN-world resume read handler', () => {
   it('executes the bounded probe in MAIN world across the current tab frames', async () => {
-    const executeScript = vi.fn().mockResolvedValue([{
-      frameId: 4,
-      result: {
-        status: 'ready',
-        capability: {
-          root: 'lib-resume-recommend',
-          vue_generation: 'vue2',
-          resume_object: 'resumeInfo',
-          allowed_keys: ['geekBaseInfo', 'geekWorkExpList'],
-          array_lengths: { geekWorkExpList: 2 },
-        },
-        schema: [
-          { key: 'geekBaseInfo', type: 'object' },
-          { key: 'professionalSkillInfo', type: 'string' },
-          { key: 'unknownList', type: 'array', array_length: 50 },
-        ],
-        nested_schema: [
-          {
-            container: 'geekDetailInfo',
-            key: 'professionalSkill',
-            type: 'string',
+    const executeScript = vi.fn()
+      .mockResolvedValueOnce([{
+        frameId: 4,
+        result: {
+          status: 'ready',
+          capability: {
+            root: 'lib-resume-recommend',
+            vue_generation: 'vue2',
+            resume_object: 'resumeInfo',
+            allowed_keys: ['geekBaseInfo', 'geekWorkExpList'],
+            array_lengths: { geekWorkExpList: 2 },
           },
-          {
-            container: 'geekDetailInfo',
-            key: 'skillItems',
-            type: 'array',
-            array_length: 50,
-          },
-        ],
-        profile: {
-          display_name: '候选人甲',
-          education: [],
-          work_experiences: [
-            { company: '示例公司甲' },
-            { company: '示例公司乙' },
+          schema: [
+            { key: 'geekBaseInfo', type: 'object' },
+            { key: 'professionalSkillInfo', type: 'string' },
+            { key: 'unknownList', type: 'array', array_length: 50 },
           ],
-          project_experiences: [],
-          skills: [],
+          nested_schema: [
+            {
+              container: 'geekDetailInfo',
+              key: 'professionalSkill',
+              type: 'string',
+            },
+            {
+              container: 'geekDetailInfo',
+              key: 'skillItems',
+              type: 'array',
+              array_length: 50,
+            },
+          ],
+          profile: {
+            display_name: '候选人甲',
+            education: [],
+            work_experiences: [
+              { company: '示例公司甲' },
+              { company: '示例公司乙' },
+            ],
+            project_experiences: [],
+            skills: [],
+          },
         },
-      },
-    }]);
+      }])
+      .mockResolvedValueOnce([]);
 
     const response = await resumeReadHandler()?.(
       17,
@@ -297,7 +299,12 @@ describe('MAIN-world resume read handler', () => {
       () => new Date('2026-08-07T02:00:00.000Z'),
     );
 
-    expect(executeScript).toHaveBeenCalledWith({
+    expect(executeScript).toHaveBeenNthCalledWith(1, {
+      target: { tabId: 17, allFrames: true },
+      world: 'MAIN',
+      func: expect.any(Function),
+    });
+    expect(executeScript).toHaveBeenNthCalledWith(2, {
       target: { tabId: 17, allFrames: true },
       world: 'MAIN',
       func: expect.any(Function),
@@ -341,6 +348,58 @@ describe('MAIN-world resume read handler', () => {
           'vue-nested-schema:container=geekDetailInfo:key=professionalSkill:string',
           'vue-nested-schema:container=geekDetailInfo:key=skillItems:array:50',
         ],
+      },
+    });
+  });
+
+  it('merges visible MAIN-world DOM tag skills before trying OCR', async () => {
+    const executeScript = vi.fn()
+      .mockResolvedValueOnce([{
+        frameId: 4,
+        result: {
+          status: 'ready',
+          capability: {
+            root: 'lib-resume-recommend',
+            vue_generation: 'vue2',
+            resume_object: 'resumeInfo',
+            allowed_keys: ['geekBaseInfo'],
+            array_lengths: {},
+          },
+          schema: [{ key: 'geekBaseInfo', type: 'object' }],
+          nested_schema: [],
+          profile: {
+            display_name: '候选人标签',
+            education: [],
+            work_experiences: [],
+            project_experiences: [],
+            skills: [],
+          },
+        },
+      }])
+      .mockResolvedValueOnce([
+        { frameId: 0, result: ['前端', 'AI全栈开发'] },
+        { frameId: 4, result: ['前端', '微服务开发'] },
+      ]);
+    const ocrReader = vi.fn().mockResolvedValue(['OCR 不应调用']);
+
+    const response = await resumeReadHandler()?.(
+      17,
+      executeScript,
+      () => new Date('2026-08-07T02:00:00.000Z'),
+      ocrReader,
+    );
+
+    expect(ocrReader).not.toHaveBeenCalled();
+    expect(response).toMatchObject({
+      ok: true,
+      snapshot: {
+        parser_version: 'boss-vue-v1',
+        profile: {
+          display_name: '候选人标签',
+          skills: ['前端', 'AI全栈开发', '微服务开发'],
+        },
+        present_fields: ['skills', 'display_name'],
+        warnings: expect.arrayContaining(['dom-skills:visible-tags']),
       },
     });
   });

@@ -11,6 +11,7 @@ import {
   isVueResumeProfileFrameProbe,
   type VueResumeProfileFrameProbe,
 } from './parser/vueResumeMapper';
+import { extractBossVisibleSkillTags, isVisibleSkillTagList } from './parser/visibleSkillTags';
 import { buildProfileSnapshot } from './parser/snapshot';
 import { isRecord, isResumeReadRequest } from './validation';
 
@@ -27,7 +28,7 @@ interface ResumeScriptResult {
 type ResumeScriptExecutor = (details: {
   target: { tabId: number; allFrames: true };
   world: 'MAIN';
-  func: typeof extractBossVueResumeProfile;
+  func: typeof extractBossVueResumeProfile | typeof extractBossVisibleSkillTags;
 }) => Promise<ResumeScriptResult[]>;
 
 type ResumeReader = (tabId: number) => Promise<ResumeReadResponse>;
@@ -101,7 +102,9 @@ export async function handleApiRequest(
 
 
 const executeResumeScript: ResumeScriptExecutor = async (details) => (
-  chrome.scripting.executeScript(details) as Promise<ResumeScriptResult[]>
+  chrome.scripting.executeScript(
+    details as Parameters<typeof chrome.scripting.executeScript>[0],
+  ) as Promise<ResumeScriptResult[]>
 );
 
 
@@ -236,6 +239,52 @@ function withOcrSkills(snapshot: ParserSnapshot, skills: string[]): ParserSnapsh
 }
 
 
+async function readMainWorldDomSkills(
+  tabId: number,
+  executor: ResumeScriptExecutor,
+): Promise<string[]> {
+  try {
+    const results = await executor({
+      target: { tabId, allFrames: true },
+      world: 'MAIN',
+      func: extractBossVisibleSkillTags,
+    });
+    const values = new Set<string>();
+    for (const { result } of results) {
+      if (!isVisibleSkillTagList(result)) {
+        continue;
+      }
+      for (const skill of result) {
+        values.add(skill);
+      }
+      if (values.size >= 20) {
+        break;
+      }
+    }
+    return Array.from(values).slice(0, 20);
+  } catch {
+    return [];
+  }
+}
+
+
+function withDomSkills(snapshot: ParserSnapshot, skills: string[]): ParserSnapshot {
+  if (!snapshot.profile || snapshot.profile.skills.length > 0 || skills.length === 0) {
+    return snapshot;
+  }
+  const merged = buildProfileSnapshot(
+    snapshot.page_kind,
+    { ...snapshot.profile, skills },
+    new Date(snapshot.captured_at),
+  );
+  return {
+    ...merged,
+    parser_version: snapshot.parser_version,
+    warnings: [...snapshot.warnings, 'dom-skills:visible-tags'].slice(0, 180),
+  };
+}
+
+
 function profileScore(
   probe: Extract<VueResumeProfileFrameProbe, { status: 'ready' }>,
 ): number {
@@ -324,10 +373,14 @@ export async function handleResumeRead(
       if (ready[0].capability.allowed_keys.length === 0) {
         return { ok: false, error: 'vue-schema-unsupported' };
       }
-      const snapshot = capabilitySnapshot(ready[0], now().toISOString());
+      let snapshot = capabilitySnapshot(ready[0], now().toISOString());
+      snapshot = withDomSkills(snapshot, await readMainWorldDomSkills(tabId, executor));
+      if (!snapshot.profile || snapshot.profile.skills.length === 0) {
+        snapshot = withOcrSkills(snapshot, await ocrReader(tabId));
+      }
       return {
         ok: true,
-        snapshot: withOcrSkills(snapshot, await ocrReader(tabId)),
+        snapshot,
       };
     }
 
