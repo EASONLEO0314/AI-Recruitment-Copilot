@@ -23,7 +23,7 @@ it('grants only the scoped MAIN-world resume read permissions', () => {
   expect(contentScript.all_frames).toBe(true);
   expect(contentScript).not.toHaveProperty('match_about_blank');
   expect(contentScript).not.toHaveProperty('match_origin_as_fallback');
-  expect(manifest.permissions).toEqual(['activeTab', 'clipboardWrite', 'storage', 'scripting']);
+  expect(manifest.permissions).toEqual(['activeTab', 'clipboardWrite', 'scripting']);
   expect(manifest.host_permissions).toEqual([
     'http://127.0.0.1:8765/*',
     'https://www.zhipin.com/*',

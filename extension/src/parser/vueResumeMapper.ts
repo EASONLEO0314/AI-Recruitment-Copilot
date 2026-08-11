@@ -517,7 +517,10 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
     };
   };
 
-  const schemaForRecord = (record: Record<string, unknown>): VueResumeSchemaField[] => {
+  const schemaForRecord = (
+    record: Record<string, unknown>,
+    allowedSchemaKeys?: readonly string[],
+  ): VueResumeSchemaField[] => {
     let descriptors: Record<string, PropertyDescriptor>;
     try {
       descriptors = Object.getOwnPropertyDescriptors(record);
@@ -526,9 +529,15 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
     }
 
     const schema: VueResumeSchemaField[] = [];
+    const allowedSchemaKeySet = allowedSchemaKeys === undefined
+      ? undefined
+      : new Set<string>(allowedSchemaKeys);
     for (const key of Object.keys(descriptors)) {
       if (schema.length >= maxSchemaFields) {
         break;
+      }
+      if (allowedSchemaKeySet !== undefined && !allowedSchemaKeySet.has(key)) {
+        continue;
       }
       const descriptor = descriptors[key];
       if (!descriptor.enumerable || !schemaKeyFormat.test(key)) {
@@ -650,7 +659,7 @@ export function extractBossVueResumeProfile(): VueResumeProfileFrameProbe {
           status: 'ready',
           capability: capabilityFor(selectedRoot.root, handle.generation, resumeInfo),
           profile: mapProfile(resumeInfo),
-          schema: schemaForRecord(resumeInfo),
+          schema: schemaForRecord(resumeInfo, allowedKeys),
           nested_schema: [],
         },
         resumeInfo,
@@ -709,17 +718,30 @@ const NESTED_SCHEMA_CONTAINERS: readonly VueResumeNestedSchemaContainer[] = [
   'geekBaseInfo',
 ];
 
+const TOP_LEVEL_SCHEMA_KEYS = [
+  'geekBaseInfo',
+  'geekWorkExpList',
+  'geekProjExpList',
+  'geekEduExpList',
+  'geekDesc',
+  'skillTagList',
+] as const;
 
-function isVueResumeSchema(value: unknown): value is VueResumeSchemaField[] {
+function isVueResumeSchema(
+  value: unknown,
+  allowedKeys?: readonly string[],
+): value is VueResumeSchemaField[] {
   if (!Array.isArray(value) || value.length > 40) {
     return false;
   }
+  const allowedKeySet = allowedKeys === undefined ? undefined : new Set<string>(allowedKeys);
   const seen = new Set<string>();
   for (const field of value) {
     if (!isRecord(field)
       || !hasOnlyKeys(field, ['key', 'type', 'array_length'])
       || typeof field.key !== 'string'
       || !/^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/.test(field.key)
+      || (allowedKeySet !== undefined && !allowedKeySet.has(field.key))
       || seen.has(field.key)
       || typeof field.type !== 'string'
       || !SCHEMA_TYPES.includes(field.type as VueResumeSchemaType)) {
@@ -775,7 +797,7 @@ export function isVueResumeProfileFrameProbe(
   }
   if (!hasOnlyKeys(value, ['status', 'capability', 'profile', 'schema', 'nested_schema'])
     || !isVueResumeFrameProbe({ status: 'ready', capability: value.capability })
-    || !isVueResumeSchema(value.schema)
+    || !isVueResumeSchema(value.schema, TOP_LEVEL_SCHEMA_KEYS)
     || !isVueResumeNestedSchema(value.nested_schema)) {
     return false;
   }

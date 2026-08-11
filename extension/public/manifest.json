@@ -6,7 +6,6 @@
   "permissions": [
     "activeTab",
     "clipboardWrite",
-    "storage",
     "scripting"
   ],
   "host_permissions": [

@@ -34,6 +34,12 @@ type ResumeScriptExecutor = (details: {
 type ResumeReader = (tabId: number) => Promise<ResumeReadResponse>;
 type OcrSkillsReader = (tabId: number) => Promise<string[]>;
 
+interface ActiveTabInfo {
+  id: number;
+  url: string;
+  windowId?: number;
+}
+
 
 function failure(code: ApiErrorCode, message: string): ApiRuntimeResponse<never> {
   return { ok: false, error: { code, message } };
@@ -127,15 +133,67 @@ async function setPanelHidden(tabId: number, hidden: boolean): Promise<void> {
 }
 
 
-async function captureVisiblePng(): Promise<string | null> {
+function isBossPageUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && parsed.hostname === 'www.zhipin.com';
+  } catch {
+    return false;
+  }
+}
+
+
+async function activeTabInfo(): Promise<ActiveTabInfo | null> {
+  if (typeof chrome === 'undefined' || !chrome.tabs?.query) {
+    return null;
+  }
+  return new Promise((resolve) => {
+    try {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        const tab = tabs[0];
+        if (chrome.runtime.lastError
+          || !tab
+          || !Number.isInteger(tab.id)
+          || typeof tab.url !== 'string') {
+          resolve(null);
+          return;
+        }
+        resolve({
+          id: Number(tab.id),
+          url: tab.url,
+          windowId: Number.isInteger(tab.windowId) ? tab.windowId : undefined,
+        });
+      });
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+
+async function activeBossTab(tabId: number): Promise<ActiveTabInfo | null> {
+  const active = await activeTabInfo();
+  if (!active || active.id !== tabId || !isBossPageUrl(active.url)) {
+    return null;
+  }
+  return active;
+}
+
+
+async function captureVisiblePng(windowId?: number): Promise<string | null> {
   if (typeof chrome === 'undefined' || !chrome.tabs?.captureVisibleTab) {
     return null;
   }
   return new Promise((resolve) => {
     try {
-      chrome.tabs.captureVisibleTab({ format: 'png' }, (dataUrl) => {
+      const callback = (dataUrl?: string) => {
         resolve(chrome.runtime.lastError ? null : dataUrl ?? null);
-      });
+      };
+      if (typeof windowId === 'number' && Number.isInteger(windowId)) {
+        chrome.tabs.captureVisibleTab(windowId, { format: 'png' }, callback);
+      } else {
+        chrome.tabs.captureVisibleTab({ format: 'png' }, callback);
+      }
     } catch {
       resolve(null);
     }
@@ -155,9 +213,9 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 
-async function cropVisibleTop(dataUrl: string): Promise<string> {
+async function cropVisibleTop(dataUrl: string): Promise<string | null> {
   if (typeof createImageBitmap !== 'function' || typeof OffscreenCanvas === 'undefined') {
-    return dataUrl;
+    return null;
   }
   try {
     const blob = await (await fetch(dataUrl)).blob();
@@ -166,12 +224,12 @@ async function cropVisibleTop(dataUrl: string): Promise<string> {
     const canvas = new OffscreenCanvas(bitmap.width, height);
     const context = canvas.getContext('2d');
     if (!context) {
-      return dataUrl;
+      return null;
     }
     context.drawImage(bitmap, 0, 0, bitmap.width, height, 0, 0, bitmap.width, height);
     return await blobToDataUrl(await canvas.convertToBlob({ type: 'image/png' }));
   } catch {
-    return dataUrl;
+    return null;
   }
 }
 
@@ -207,15 +265,33 @@ async function fetchOcrSkills(
 }
 
 
-async function readVisibleTopOcrSkills(tabId: number): Promise<string[]> {
+export async function readVisibleTopOcrSkills(tabId: number): Promise<string[]> {
+  const initialActive = await activeBossTab(tabId);
+  if (!initialActive) {
+    return [];
+  }
   await setPanelHidden(tabId, true);
   try {
     await delay(120);
-    const screenshot = await captureVisiblePng();
+    const activeBeforeCapture = await activeBossTab(tabId);
+    if (!activeBeforeCapture) {
+      return [];
+    }
+    const screenshot = await captureVisiblePng(activeBeforeCapture.windowId);
     if (!screenshot) {
       return [];
     }
-    return await fetchOcrSkills(await cropVisibleTop(screenshot));
+    if (!await activeBossTab(tabId)) {
+      return [];
+    }
+    const cropped = await cropVisibleTop(screenshot);
+    if (!cropped) {
+      return [];
+    }
+    if (!await activeBossTab(tabId)) {
+      return [];
+    }
+    return await fetchOcrSkills(cropped);
   } finally {
     await setPanelHidden(tabId, false);
   }

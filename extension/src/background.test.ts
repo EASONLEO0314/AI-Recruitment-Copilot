@@ -4,6 +4,7 @@ import {
   createRuntimeMessageListener,
   handleApiRequest,
   isApiRequestMessage,
+  readVisibleTopOcrSkills,
 } from './background';
 import * as backgroundModule from './background';
 
@@ -26,6 +27,33 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+
+function installChromeForOcr({
+  queryTabs,
+  screenshot = 'data:image/png;base64,SCREENSHOT',
+}: {
+  queryTabs: () => Array<{ id: number; url: string; windowId: number }>;
+  screenshot?: string;
+}) {
+  const query = vi.fn((_queryInfo: unknown, callback: (tabs: unknown[]) => void) => {
+    callback(queryTabs());
+  });
+  const captureVisibleTab = vi.fn((...args: unknown[]) => {
+    const callback = args[args.length - 1] as (dataUrl?: string) => void;
+    callback(screenshot);
+  });
+  const sendMessage = vi.fn().mockResolvedValue(undefined);
+  vi.stubGlobal('chrome', {
+    runtime: {},
+    tabs: {
+      captureVisibleTab,
+      query,
+      sendMessage,
+    },
+  });
+  return { captureVisibleTab, query, sendMessage };
 }
 
 
@@ -247,6 +275,67 @@ describe('background runtime listener', () => {
 });
 
 
+describe('OCR screenshot fallback boundaries', () => {
+  it('does not capture when the active tab is not the triggering BOSS tab', async () => {
+    const { captureVisibleTab, sendMessage } = installChromeForOcr({
+      queryTabs: () => [{ id: 18, url: 'https://www.zhipin.com/web/geek/recommend', windowId: 42 }],
+    });
+
+    const skills = await readVisibleTopOcrSkills(17);
+
+    expect(skills).toEqual([]);
+    expect(captureVisibleTab).not.toHaveBeenCalled();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('discards the screenshot when the active tab changes after capture', async () => {
+    vi.useFakeTimers();
+    let queryCount = 0;
+    const { captureVisibleTab } = installChromeForOcr({
+      queryTabs: () => {
+        queryCount += 1;
+        return queryCount < 3
+          ? [{ id: 17, url: 'https://www.zhipin.com/web/geek/recommend', windowId: 42 }]
+          : [{ id: 18, url: 'https://example.com/private', windowId: 42 }];
+      },
+    });
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+
+    const promise = readVisibleTopOcrSkills(17);
+    await vi.advanceTimersByTimeAsync(120);
+    const skills = await promise;
+
+    expect(skills).toEqual([]);
+    expect(captureVisibleTab).toHaveBeenCalledOnce();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+  it('does not send a full-page screenshot when top cropping is unavailable', async () => {
+    vi.useFakeTimers();
+    const { captureVisibleTab } = installChromeForOcr({
+      queryTabs: () => [{ id: 17, url: 'https://www.zhipin.com/web/geek/recommend', windowId: 42 }],
+    });
+    const fetcher = vi.fn();
+    vi.stubGlobal('fetch', fetcher);
+    vi.stubGlobal('OffscreenCanvas', undefined);
+    vi.stubGlobal('createImageBitmap', undefined);
+
+    const promise = readVisibleTopOcrSkills(17);
+    await vi.advanceTimersByTimeAsync(120);
+    const skills = await promise;
+
+    expect(skills).toEqual([]);
+    expect(captureVisibleTab).toHaveBeenCalledWith(
+      42,
+      { format: 'png' },
+      expect.any(Function),
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});
+
+
 describe('MAIN-world resume read handler', () => {
   it('executes the bounded probe in MAIN world across the current tab frames', async () => {
     const executeScript = vi.fn()
@@ -263,8 +352,7 @@ describe('MAIN-world resume read handler', () => {
           },
           schema: [
             { key: 'geekBaseInfo', type: 'object' },
-            { key: 'professionalSkillInfo', type: 'string' },
-            { key: 'unknownList', type: 'array', array_length: 50 },
+            { key: 'geekWorkExpList', type: 'array', array_length: 2 },
           ],
           nested_schema: [
             {
@@ -343,8 +431,7 @@ describe('MAIN-world resume read handler', () => {
           'vue-capability:key=geekWorkExpList',
           'vue-capability:array=geekWorkExpList:2',
           'vue-schema:key=geekBaseInfo:object',
-          'vue-schema:key=professionalSkillInfo:string',
-          'vue-schema:key=unknownList:array:50',
+          'vue-schema:key=geekWorkExpList:array:2',
           'vue-nested-schema:container=geekDetailInfo:key=professionalSkill:string',
           'vue-nested-schema:container=geekDetailInfo:key=skillItems:array:50',
         ],

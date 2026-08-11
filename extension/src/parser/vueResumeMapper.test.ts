@@ -159,9 +159,11 @@ describe('MAIN-world Vue resume profile mapper', () => {
       },
       schema: expect.arrayContaining([
         { key: 'geekBaseInfo', type: 'object' },
-        { key: 'professionalSkillInfo', type: 'string' },
-        { key: 'unknownList', type: 'array', array_length: 50 },
-        { key: 'accessorField', type: 'other' },
+        { key: 'geekWorkExpList', type: 'array', array_length: 2 },
+        { key: 'geekProjExpList', type: 'array', array_length: 1 },
+        { key: 'geekEduExpList', type: 'array', array_length: 1 },
+        { key: 'geekDesc', type: 'string' },
+        { key: 'skillTagList', type: 'array', array_length: 3 },
       ]),
       nested_schema: expect.arrayContaining([
         {
@@ -247,6 +249,10 @@ describe('MAIN-world Vue resume profile mapper', () => {
     expect(serializedProfile).not.toContain('不得读取');
     expect(serializedSchema).not.toContain('不得读取');
     expect(serializedSchema).not.toContain('bad-key');
+    expect(serializedSchema).not.toContain('professionalSkillInfo');
+    expect(serializedSchema).not.toContain('unknownList');
+    expect(serializedSchema).not.toContain('secretInternalState');
+    expect(serializedSchema).not.toContain('accessorField');
     expect(serializedNestedSchema).not.toContain('privatePhone');
     expect(serializedNestedSchema).not.toContain('不得读取');
   });
@@ -286,7 +292,7 @@ describe('MAIN-world Vue resume profile mapper', () => {
     expect(result.profile.skills).toHaveLength(50);
     expect(result.capability.array_lengths.geekWorkExpList).toBe(50);
     expect(result.capability.array_lengths.skillTagList).toBe(50);
-    expect(result.schema).toHaveLength(40);
+    expect(result.schema).toHaveLength(4);
     expect(result.nested_schema.length).toBeGreaterThan(40);
     expect(result.nested_schema.length).toBeLessThanOrEqual(120);
     expect(JSON.stringify(result.schema)).not.toContain('不得读取');
@@ -528,8 +534,8 @@ describe('MAIN-world Vue resume profile mapper', () => {
     expect(result).toMatchObject({
       status: 'ready',
       schema: expect.arrayContaining([
-        { key: 'circular', type: 'object' },
-        { key: 'accessorField', type: 'other' },
+        { key: 'geekBaseInfo', type: 'object' },
+        { key: 'geekWorkExpList', type: 'array', array_length: 0 },
       ]),
       profile: {
         display_name: '候选人丙',
@@ -540,6 +546,8 @@ describe('MAIN-world Vue resume profile mapper', () => {
       },
     });
     expect(accessorCalls).toBe(0);
+    expect(JSON.stringify(result)).not.toContain('circular');
+    expect(JSON.stringify(result)).not.toContain('accessorField');
     expect(JSON.stringify(result)).not.toContain('private getter detail');
     expect(JSON.stringify(result)).not.toContain('top-level getter detail');
   });
@@ -576,6 +584,10 @@ describe('Vue resume profile probe validation', () => {
     expect(isVueResumeProfileFrameProbe({
       ...valid,
       schema: [{ key: 'privateField', type: 'private-type' }],
+    })).toBe(false);
+    expect(isVueResumeProfileFrameProbe({
+      ...valid,
+      schema: [{ key: 'privateField', type: 'string' }],
     })).toBe(false);
     expect(isVueResumeProfileFrameProbe({
       ...valid,
