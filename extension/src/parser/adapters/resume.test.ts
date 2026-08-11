@@ -120,6 +120,45 @@ describe('resume frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('reads skills that are rendered beside the name and base info', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="resume-content">
+        <div class="resume-basic">
+          <h1 class="resume-name">候选人顶部</h1>
+          <div class="base-info">
+            <span>深圳</span>
+            <span>4 年经验</span>
+            <span>本科</span>
+          </div>
+          <div class="profile-tags">
+            <span class="label">Java</span>
+            <span class="label">MySQL</span>
+            <span class="badge">Spring Boot</span>
+          </div>
+        </div>
+        <section class="resume-item">
+          <h2 class="section-title">工作经历</h2>
+          <article class="history-item">
+            <span class="company-name">示例公司</span>
+            <span class="position-name">Java 工程师</span>
+          </article>
+        </section>
+      </main>`);
+
+    const snapshot = parseResumeFrame(document, capturedAt);
+
+    expect(snapshot.profile).toMatchObject({
+      display_name: '候选人顶部',
+      location: '深圳',
+      experience_years: 4,
+      skills: ['Java', 'MySQL', 'Spring Boot'],
+    });
+    expect(snapshot.profile?.skills).not.toContain('深圳');
+    expect(snapshot.profile?.skills).not.toContain('4 年经验');
+    expect(snapshot.profile?.skills).not.toContain('本科');
+    expectNoPageOperations();
+  });
+
   it('returns unsupported when no recognized resume root exists', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="unrelated-page">

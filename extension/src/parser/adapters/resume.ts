@@ -46,6 +46,7 @@ const PROJECT_HEADINGS = new Set(['项目经历', '项目经验']);
 const SKILL_HEADING_PATTERN = /^(?:专业技能|技能标签|技能特长|个人技能|技能)$/;
 const SKILL_HEADING_PREFIX_PATTERN = /^(?:专业技能|技能标签|技能特长|个人技能|技能)\s*[:：\-—]?\s*/;
 const NON_SKILL_TOKEN_PATTERN = /^(?:工作经历|工作经验|教育经历|教育背景|项目经历|项目经验|求职意向|个人优势)$/;
+const HEADER_NON_SKILL_TOKEN_PATTERN = /^(?:\d+\s*(?:年|岁)(?:经验)?|本科|硕士|博士|大专|高中|中专|学历|男|女|在职.*|离职.*|随时到岗|应届生|.+工程师|.+经理|.+主管|.+负责人|.+顾问|.+专家|.+架构师)$/;
 const SKILL_CONTAINER_ROOTS = [
   SECTION_ROOTS,
   '.skills',
@@ -65,6 +66,29 @@ const SKILL_TOKEN_SELECTORS = [
   ':scope .badge',
   ':scope [class*="tag"]',
   ':scope [class*="skill"]',
+  ':scope .ai-preference-content-option .title',
+  ':scope .ai-preference-content-option span',
+].join(', ');
+const PROFILE_HEADER_ROOTS = [
+  '.resume-header',
+  '.resume-basic',
+  '.basic-info',
+  '.geek-base-info',
+  '.base-info-wrap',
+  '.profile-info',
+  '.resume-top',
+  '.resume-name-wrap',
+  '.name-wrap',
+  '.geek-info',
+  '.candidate-info',
+].join(', ');
+const PROFILE_HEADER_SKILL_SELECTORS = [
+  ':scope .skill-label',
+  ':scope .skill-tag',
+  ':scope .tags-wrap span',
+  ':scope .tag-item',
+  ':scope .label',
+  ':scope .badge',
   ':scope .ai-preference-content-option .title',
   ':scope .ai-preference-content-option span',
 ].join(', ');
@@ -274,6 +298,24 @@ function addSkillText(values: Set<string>, text: string, splitWhitespace = false
 }
 
 
+function addProfileHeaderSkillText(
+  values: Set<string>,
+  text: string,
+  excludedTexts: ReadonlySet<string>,
+): void {
+  const normalized = normalizeText(text, 80);
+  const compact = normalized.replace(/\s+/g, '');
+  if (!normalized
+    || excludedTexts.has(normalized)
+    || excludedTexts.has(compact)
+    || HEADER_NON_SKILL_TOKEN_PATTERN.test(normalized)
+    || !isLikelySkillToken(normalized)) {
+    return;
+  }
+  values.add(normalized);
+}
+
+
 function collectSkillTokens(container: Element, heading: Element): string[] {
   const values = new Set<string>();
   for (const element of Array.from(container.querySelectorAll(SKILL_TOKEN_SELECTORS))) {
@@ -293,6 +335,60 @@ function collectSkillTokens(container: Element, heading: Element): string[] {
   }
 
   return Array.from(values);
+}
+
+
+function profileNameElement(root: Element): Element | undefined {
+  return Array.from(root.querySelectorAll('.resume-name, .geek-name, .name'))
+    .find((element) => !isHidden(element));
+}
+
+
+function profileHeaderContainers(root: Element): Element[] {
+  const nameElement = profileNameElement(root);
+  if (!nameElement) {
+    return [];
+  }
+
+  const containers: Element[] = [];
+  const closest = nameElement.closest(PROFILE_HEADER_ROOTS);
+  if (closest && root.contains(closest) && !isHidden(closest)) {
+    containers.push(closest);
+  }
+
+  let parent = nameElement.parentElement;
+  for (let depth = 0; parent && depth < 4; depth += 1) {
+    if (parent === root) {
+      break;
+    }
+    if (root.contains(parent) && !isHidden(parent)) {
+      containers.push(parent);
+    }
+    parent = parent.parentElement;
+  }
+
+  return [...new Set(containers)]
+    .filter((container) =>
+      visibleText(container, 801).length <= 800
+      && container.querySelector(PROFILE_HEADER_SKILL_SELECTORS) !== null)
+    .slice(0, 3);
+}
+
+
+function skillTextsNearProfileHeader(
+  root: Element,
+  excludedTexts: ReadonlySet<string>,
+): string[] {
+  const values = new Set<string>();
+  for (const container of profileHeaderContainers(root)) {
+    const elements = Array.from(container.querySelectorAll(PROFILE_HEADER_SKILL_SELECTORS))
+      .filter((element) => !isHidden(element))
+      .slice(0, 80);
+    for (const element of elements) {
+      addProfileHeaderSkillText(values, visibleText(element, 80), excludedTexts);
+    }
+  }
+  return Array.from(values).slice(0, 50);
 }
 
 
@@ -394,6 +490,12 @@ export function parseResumeRoot(
   const location = baseInfo[0] && !LOCATION_EXCLUSIONS.test(baseInfo[0])
     ? baseInfo[0]
     : undefined;
+  const displayName = firstText(root, ['.resume-name', '.geek-name', '.name'], 80);
+  const excludedHeaderTexts = new Set(
+    [displayName, location, experienceText]
+      .filter((value): value is string => Boolean(value))
+      .flatMap((value) => [value, value.replace(/\s+/g, '')]),
+  );
   const skills = [
     ...allTexts(
       root,
@@ -406,10 +508,11 @@ export function parseResumeRoot(
       80,
     ),
     ...skillTextsNearHeadings(root),
+    ...skillTextsNearProfileHeader(root, excludedHeaderTexts),
   ];
 
   const profile: CandidateProfile = {
-    display_name: firstText(root, ['.resume-name', '.geek-name', '.name'], 80),
+    display_name: displayName,
     location,
     experience_years: experienceYears,
     education,
