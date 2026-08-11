@@ -413,6 +413,11 @@ CONCEPT_DEFINITIONS: list[dict[str, Any]] = [
 ]
 
 
+CONCEPT_CATEGORY_BY_NAME = {
+    definition["canonical"]: definition["category"] for definition in CONCEPT_DEFINITIONS
+}
+
+
 FIELD_LABELS = {
     "job_title": "岗位名称",
     "written_test_required": "是否需要笔试题",
@@ -521,6 +526,67 @@ def _first_snippet(text: str, query: str, max_length: int = 160) -> str:
     return re.sub(r"\s+", " ", snippet)
 
 
+def _first_preferred_marker_index(text: str) -> int:
+    markers = ["加分项", "优先条件", "优先考虑", "加分条件", "以下经验优先"]
+    indexes = [text.find(marker) for marker in markers if marker in text]
+    return min(indexes) if indexes else -1
+
+
+def extract_experience_years_min(text: str) -> int | None:
+    years: list[int] = []
+    patterns = [
+        r"(\d{1,2})\s*年(?:及以上|以上|经验)",
+        r"(\d{1,2})\s*年以上",
+        r"(\d{1,2})\s*-\s*\d{1,2}\s*年",
+    ]
+    for pattern in patterns:
+        for match in re.finditer(pattern, text):
+            value = int(match.group(1))
+            if 0 < value <= 20:
+                years.append(value)
+    return min(years) if years else None
+
+
+def extract_education_keywords(text: str) -> list[str]:
+    ordered = ["专科", "本科", "研究生", "硕士", "博士"]
+    return [keyword for keyword in ordered if keyword in text]
+
+
+def build_job_profile(job: dict[str, Any]) -> dict[str, Any]:
+    jd = clean_text(job.get("jd"))
+    profile_context = " ".join(
+        clean_text(job.get(key))
+        for key in ["title", "department", "project"]
+        if clean_text(job.get(key))
+    )
+    preferred_index = _first_preferred_marker_index(jd)
+    required_text = jd[:preferred_index] if preferred_index >= 0 else jd
+    preferred_text = jd[preferred_index:] if preferred_index >= 0 else ""
+    keyword_text = " ".join(job.get("required_keywords", []))
+
+    required_concepts = set(extract_concepts_from_text(
+        f"{profile_context}\n{keyword_text}\n{required_text}"
+    ))
+    preferred_concepts = set(extract_concepts_from_text(preferred_text))
+    all_concepts = set(job.get("concepts", []))
+    if not required_concepts:
+        required_concepts = all_concepts - preferred_concepts
+
+    concept_categories = sorted({
+        CONCEPT_CATEGORY_BY_NAME[concept]
+        for concept in all_concepts
+        if concept in CONCEPT_CATEGORY_BY_NAME
+    })
+    return {
+        "required_concepts": sorted(required_concepts & all_concepts),
+        "preferred_concepts": sorted(preferred_concepts - required_concepts),
+        "all_concepts": sorted(all_concepts),
+        "concept_categories": concept_categories,
+        "education_keywords": extract_education_keywords(jd),
+        "experience_years_min": extract_experience_years_min(jd),
+    }
+
+
 def _row_to_job(row: dict[str, Any], row_number: int, ordinal: int) -> dict[str, Any] | None:
     title = clean_text(row.get(FIELD_LABELS["job_title"]))
     jd = clean_text(row.get(FIELD_LABELS["jd"]))
@@ -545,7 +611,7 @@ def _row_to_job(row: dict[str, Any], row_number: int, ordinal: int) -> dict[str,
     )
     concepts = extract_concepts_from_text(all_text)
 
-    return {
+    job = {
         "job_id": f"job-{ordinal:03d}",
         "source_row": row_number,
         "title": title,
@@ -566,6 +632,8 @@ def _row_to_job(row: dict[str, Any], row_number: int, ordinal: int) -> dict[str,
         "jd": jd,
         "concepts": concepts,
     }
+    job["profile"] = build_job_profile(job)
+    return job
 
 
 def _build_documents(job: dict[str, Any]) -> list[dict[str, Any]]:
@@ -609,6 +677,79 @@ def _build_documents(job: dict[str, Any]) -> list[dict[str, Any]]:
             }
         )
     return [document for document in documents if document["text"]]
+
+
+def _quality_warning(
+    code: str,
+    message: str,
+    *,
+    severity: str = "warning",
+    job: dict[str, Any] | None = None,
+    title: str | None = None,
+) -> dict[str, Any]:
+    warning = {
+        "code": code,
+        "severity": severity,
+        "message": message,
+        "job_id": job.get("job_id") if job else None,
+        "source_row": job.get("source_row") if job else None,
+        "title": job.get("title") if job else title,
+    }
+    return {key: value for key, value in warning.items() if value is not None}
+
+
+def build_quality_report(rows: list[dict[str, Any]], jobs: list[dict[str, Any]]) -> dict[str, Any]:
+    warnings: list[dict[str, Any]] = []
+    status_counts: dict[str, int] = defaultdict(int)
+    department_counts: dict[str, int] = defaultdict(int)
+    jobs_by_title: dict[str, list[dict[str, Any]]] = defaultdict(list)
+
+    for job in jobs:
+        status_counts[job.get("status") or "未填写"] += 1
+        department_counts[job.get("department") or "未填写"] += 1
+        jobs_by_title[job["title"]].append(job)
+
+        if not job.get("jd"):
+            warnings.append(_quality_warning("missing_jd", "岗位缺少 JD 正文。", job=job))
+        if not job.get("required_keywords"):
+            warnings.append(_quality_warning(
+                "missing_required_keywords",
+                "岗位关键词列为空，当前只依赖 JD 自动抽取。",
+                severity="info",
+                job=job,
+            ))
+        if not job.get("concepts"):
+            warnings.append(_quality_warning(
+                "no_concepts_extracted",
+                "未从 JD 或关键词中识别出标准概念。",
+                job=job,
+            ))
+        if not job.get("department"):
+            warnings.append(_quality_warning(
+                "missing_department",
+                "岗位缺少入职部门。",
+                severity="info",
+                job=job,
+            ))
+
+    for title, duplicated_jobs in sorted(jobs_by_title.items()):
+        if len(duplicated_jobs) <= 1:
+            continue
+        warnings.append(_quality_warning(
+            "duplicate_title",
+            f"发现 {len(duplicated_jobs)} 个同名岗位，后续后台管理需要人工确认是否合并。",
+            severity="info",
+            title=title,
+        ))
+
+    return {
+        "total_rows": len(rows),
+        "imported_jobs": len(jobs),
+        "warning_count": len(warnings),
+        "status_counts": dict(sorted(status_counts.items())),
+        "department_counts": dict(sorted(department_counts.items())),
+        "warnings": warnings[:80],
+    }
 
 
 def build_knowledge_base(
@@ -657,6 +798,7 @@ def build_knowledge_base(
         "jobs": jobs,
         "concepts": concepts,
         "documents": documents,
+        "quality_report": build_quality_report(rows, jobs),
     }
 
 
@@ -668,6 +810,14 @@ def _empty_knowledge_base() -> dict[str, Any]:
         "jobs": [],
         "concepts": [],
         "documents": [],
+        "quality_report": {
+            "total_rows": 0,
+            "imported_jobs": 0,
+            "warning_count": 0,
+            "status_counts": {},
+            "department_counts": {},
+            "warnings": [],
+        },
     }
 
 
@@ -715,6 +865,7 @@ def write_knowledge_base_to_sqlite(
                 platform TEXT,
                 written_test_required TEXT,
                 required_keywords_json TEXT NOT NULL,
+                profile_json TEXT NOT NULL,
                 expected_outputs TEXT,
                 jd TEXT NOT NULL
             );
@@ -759,6 +910,10 @@ def write_knowledge_base_to_sqlite(
             "source_file_name": str(source.get("file_name") or ""),
             "source_row_count": str(source.get("row_count") or 0),
             "source_job_count": str(source.get("job_count") or 0),
+            "quality_report_json": json.dumps(
+                kb.get("quality_report", _empty_knowledge_base()["quality_report"]),
+                ensure_ascii=False,
+            ),
         }
         connection.executemany(
             "INSERT INTO metadata (key, value) VALUES (?, ?)",
@@ -771,9 +926,9 @@ def write_knowledge_base_to_sqlite(
                 job_id, source_row, title, department, project, headcount,
                 change_type, hiring_type, salary_min, salary_max, salary_months,
                 start_time, status, platform, written_test_required,
-                required_keywords_json, expected_outputs, jd
+                required_keywords_json, profile_json, expected_outputs, jd
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             [
                 (
@@ -793,6 +948,7 @@ def write_knowledge_base_to_sqlite(
                     job.get("platform"),
                     job.get("written_test_required"),
                     json.dumps(job.get("required_keywords", []), ensure_ascii=False),
+                    json.dumps(job.get("profile", {}), ensure_ascii=False),
                     job.get("expected_outputs"),
                     job.get("jd", ""),
                 )
@@ -896,6 +1052,7 @@ def load_knowledge_base_from_sqlite(db_path: Path | None = None) -> dict[str, An
                 "platform": row["platform"],
                 "written_test_required": row["written_test_required"],
                 "required_keywords": json.loads(row["required_keywords_json"]),
+                "profile": json.loads(row["profile_json"]),
                 "expected_outputs": row["expected_outputs"],
                 "jd": row["jd"],
                 "concepts": job_concepts[row["job_id"]],
@@ -940,12 +1097,13 @@ def load_knowledge_base_from_sqlite(db_path: Path | None = None) -> dict[str, An
         "jobs": jobs,
         "concepts": concepts,
         "documents": documents,
+        "quality_report": json.loads(metadata.get("quality_report_json") or "{}")
+        or _empty_knowledge_base()["quality_report"],
     }
 
 
 def load_default_knowledge_base() -> dict[str, Any]:
     return load_knowledge_base_from_sqlite()
-
 
 
 def summarize_knowledge_base(kb: dict[str, Any]) -> dict[str, Any]:
@@ -957,6 +1115,26 @@ def summarize_knowledge_base(kb: dict[str, Any]) -> dict[str, Any]:
         "total_jobs": len(kb.get("jobs", [])),
         "total_concepts": len(concepts),
         "top_concepts": concepts[:12],
+    }
+
+
+def quality_report_for(kb: dict[str, Any]) -> dict[str, Any]:
+    return kb.get("quality_report") or _empty_knowledge_base()["quality_report"]
+
+
+def get_job_detail(job_id: str, kb: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    kb = kb or load_default_knowledge_base()
+    job = next((item for item in kb.get("jobs", []) if item.get("job_id") == job_id), None)
+    if not job:
+        return None
+    documents = [
+        document
+        for document in kb.get("documents", [])
+        if document.get("job_id") == job_id
+    ]
+    return {
+        **job,
+        "documents": documents,
     }
 
 

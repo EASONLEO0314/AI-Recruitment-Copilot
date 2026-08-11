@@ -2,12 +2,14 @@
 
 from uuid import uuid4
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.demo import build_demo_assessment
 from backend.app.knowledge_base import (
+    get_job_detail,
     load_default_knowledge_base,
+    quality_report_for,
     search_knowledge_base,
     summarize_knowledge_base,
 )
@@ -15,6 +17,8 @@ from backend.app.models import (
     AssessmentResponse,
     DemoAssessmentRequest,
     HealthResponse,
+    KnowledgeJobDetailResponse,
+    KnowledgeQualityResponse,
     KnowledgeSearchResponse,
     KnowledgeSummaryResponse,
     OcrSkillsRequest,
@@ -89,6 +93,14 @@ async def knowledge_summary(request: Request) -> KnowledgeSummaryResponse:
     return KnowledgeSummaryResponse(request_id=request.state.request_id, **summary)
 
 
+@app.get("/v1/knowledge/quality", response_model=KnowledgeQualityResponse)
+async def knowledge_quality(request: Request) -> KnowledgeQualityResponse:
+    return KnowledgeQualityResponse(
+        request_id=request.state.request_id,
+        report=quality_report_for(load_default_knowledge_base()),
+    )
+
+
 @app.get("/v1/knowledge/search", response_model=KnowledgeSearchResponse)
 async def knowledge_search(
     request: Request,
@@ -97,3 +109,14 @@ async def knowledge_search(
 ) -> KnowledgeSearchResponse:
     result = search_knowledge_base(query, limit=limit)
     return KnowledgeSearchResponse(request_id=request.state.request_id, **result)
+
+
+@app.get("/v1/knowledge/jobs/{job_id}", response_model=KnowledgeJobDetailResponse)
+async def knowledge_job_detail(
+    job_id: str,
+    request: Request,
+) -> KnowledgeJobDetailResponse:
+    detail = get_job_detail(job_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="job-not-found")
+    return KnowledgeJobDetailResponse(request_id=request.state.request_id, **detail)
