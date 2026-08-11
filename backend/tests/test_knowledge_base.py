@@ -1,7 +1,12 @@
 from fastapi.testclient import TestClient
 
 import backend.app.main as main
-from backend.app.knowledge_base import build_knowledge_base, search_knowledge_base
+from backend.app.knowledge_base import (
+    build_knowledge_base,
+    load_knowledge_base_from_sqlite,
+    search_knowledge_base,
+    write_knowledge_base_to_sqlite,
+)
 from backend.app.main import app
 
 
@@ -72,6 +77,35 @@ def test_search_knowledge_base_returns_relevant_jobs() -> None:
         "Redis",
         "Spring Boot",
     }
+
+
+def test_sqlite_storage_round_trips_knowledge_base(tmp_path) -> None:
+    kb = build_knowledge_base(
+        [
+            {
+                "_source_row": 2,
+                "岗位名称": "后端工程师",
+                "岗位jd": "负责 Java、Spring Boot、Redis、Kafka 高并发系统开发。",
+                "需求数量": 1,
+                "岗位状态": "招聘中",
+            }
+        ],
+        source_name="fixture.xlsx",
+        generated_at="2026-08-11T00:00:00+00:00",
+    )
+    db_path = tmp_path / "job_knowledge_base.sqlite3"
+
+    write_knowledge_base_to_sqlite(kb, db_path=db_path)
+    loaded = load_knowledge_base_from_sqlite(db_path)
+
+    assert loaded["source"] == {
+        "file_name": "fixture.xlsx",
+        "row_count": 1,
+        "job_count": 1,
+    }
+    assert loaded["jobs"][0]["title"] == "后端工程师"
+    assert set(loaded["jobs"][0]["concepts"]) >= {"Java", "Spring Boot", "Redis", "Kafka"}
+    assert loaded["documents"][0]["job_id"] == "job-001"
 
 
 def test_knowledge_summary_endpoint_returns_loaded_kb(monkeypatch) -> None:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import sys
 from datetime import datetime, timezone
@@ -14,11 +13,15 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from backend.app.knowledge_base import build_knowledge_base, clean_text  # noqa: E402
+from backend.app.knowledge_base import (  # noqa: E402
+    build_knowledge_base,
+    clean_text,
+    write_knowledge_base_to_sqlite,
+)
 
 
 DEFAULT_SOURCE = "/Users/eason/Documents/招聘信息表.xlsx"
-DEFAULT_OUTPUT = PROJECT_ROOT / "backend" / "app" / "data" / "job_knowledge_base.json"
+DEFAULT_OUTPUT = PROJECT_ROOT / "backend" / "app" / "data" / "job_knowledge_base.sqlite3"
 
 
 def load_rows(source: Path) -> list[dict[str, Any]]:
@@ -53,7 +56,7 @@ def load_rows(source: Path) -> list[dict[str, Any]]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate backend/app/data/job_knowledge_base.json from an xlsx file."
+        description="Generate backend/app/data/job_knowledge_base.sqlite3 from an xlsx file."
     )
     parser.add_argument(
         "source",
@@ -64,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         default=str(DEFAULT_OUTPUT),
-        help="Output JSON path",
+        help="Output SQLite database path",
     )
     return parser.parse_args()
 
@@ -83,11 +86,7 @@ def main() -> int:
         generated_at=datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
     )
 
-    output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(
-        json.dumps(kb, ensure_ascii=False, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    write_knowledge_base_to_sqlite(kb, db_path=output)
     print(
         "generated "
         f"{output} from {source.name}: "

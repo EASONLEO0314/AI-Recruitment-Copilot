@@ -14,7 +14,7 @@ venv/
 
 # Local configuration and data
 .env
-backend/app/data/job_knowledge_base.json
+backend/app/data/job_knowledge_base.*
 *.sqlite
 *.sqlite3
 *.db

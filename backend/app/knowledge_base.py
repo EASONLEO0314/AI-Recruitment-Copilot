@@ -1,7 +1,7 @@
 """Local job knowledge base helpers.
 
-The runtime API only reads generated JSON. Excel parsing lives in the build
-script so the local service can stay lightweight.
+The runtime API reads a generated SQLite database. Excel parsing lives in the
+build script so the local service can stay lightweight.
 """
 
 from __future__ import annotations
@@ -9,13 +9,14 @@ from __future__ import annotations
 import json
 import math
 import re
+import sqlite3
 import unicodedata
 from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
 
-DATA_PATH = Path(__file__).parent / "data" / "job_knowledge_base.json"
+DATA_PATH = Path(__file__).parent / "data" / "job_knowledge_base.sqlite3"
 
 
 CONCEPT_DEFINITIONS: list[dict[str, Any]] = [
@@ -659,17 +660,292 @@ def build_knowledge_base(
     }
 
 
-def load_default_knowledge_base() -> dict[str, Any]:
-    if not DATA_PATH.exists():
-        return {
-            "schema_version": 1,
-            "generated_at": None,
-            "source": {"file_name": None, "row_count": 0, "job_count": 0},
-            "jobs": [],
-            "concepts": [],
-            "documents": [],
+def _empty_knowledge_base() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "generated_at": None,
+        "source": {"file_name": None, "row_count": 0, "job_count": 0},
+        "jobs": [],
+        "concepts": [],
+        "documents": [],
+    }
+
+
+def write_knowledge_base_to_sqlite(
+    kb: dict[str, Any],
+    *,
+    db_path: Path | None = None,
+) -> None:
+    path = db_path or DATA_PATH
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp_path = path.with_name(f"{path.name}.tmp")
+    if temp_path.exists():
+        temp_path.unlink()
+
+    with sqlite3.connect(temp_path) as connection:
+        connection.execute("PRAGMA foreign_keys = ON")
+        connection.executescript(
+            """
+            DROP TABLE IF EXISTS document_concepts;
+            DROP TABLE IF EXISTS documents;
+            DROP TABLE IF EXISTS job_concepts;
+            DROP TABLE IF EXISTS concepts;
+            DROP TABLE IF EXISTS jobs;
+            DROP TABLE IF EXISTS metadata;
+
+            CREATE TABLE metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+
+            CREATE TABLE jobs (
+                job_id TEXT PRIMARY KEY,
+                source_row INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                department TEXT,
+                project TEXT,
+                headcount INTEGER,
+                change_type TEXT,
+                hiring_type TEXT,
+                salary_min INTEGER,
+                salary_max INTEGER,
+                salary_months TEXT,
+                start_time TEXT,
+                status TEXT,
+                platform TEXT,
+                written_test_required TEXT,
+                required_keywords_json TEXT NOT NULL,
+                expected_outputs TEXT,
+                jd TEXT NOT NULL
+            );
+
+            CREATE TABLE concepts (
+                canonical TEXT PRIMARY KEY,
+                category TEXT NOT NULL,
+                aliases_json TEXT NOT NULL,
+                frequency INTEGER NOT NULL
+            );
+
+            CREATE TABLE job_concepts (
+                job_id TEXT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+                canonical TEXT NOT NULL REFERENCES concepts(canonical) ON DELETE CASCADE,
+                PRIMARY KEY (job_id, canonical)
+            );
+
+            CREATE TABLE documents (
+                doc_id TEXT PRIMARY KEY,
+                job_id TEXT NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+                title TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                text TEXT NOT NULL
+            );
+
+            CREATE TABLE document_concepts (
+                doc_id TEXT NOT NULL REFERENCES documents(doc_id) ON DELETE CASCADE,
+                canonical TEXT NOT NULL REFERENCES concepts(canonical) ON DELETE CASCADE,
+                PRIMARY KEY (doc_id, canonical)
+            );
+
+            CREATE INDEX idx_jobs_title ON jobs(title);
+            CREATE INDEX idx_documents_job_id ON documents(job_id);
+            CREATE INDEX idx_job_concepts_canonical ON job_concepts(canonical);
+            """
+        )
+
+        source = kb.get("source", {})
+        metadata = {
+            "schema_version": str(kb.get("schema_version", 1)),
+            "generated_at": str(kb.get("generated_at") or ""),
+            "source_file_name": str(source.get("file_name") or ""),
+            "source_row_count": str(source.get("row_count") or 0),
+            "source_job_count": str(source.get("job_count") or 0),
         }
-    return json.loads(DATA_PATH.read_text(encoding="utf-8"))
+        connection.executemany(
+            "INSERT INTO metadata (key, value) VALUES (?, ?)",
+            metadata.items(),
+        )
+
+        connection.executemany(
+            """
+            INSERT INTO jobs (
+                job_id, source_row, title, department, project, headcount,
+                change_type, hiring_type, salary_min, salary_max, salary_months,
+                start_time, status, platform, written_test_required,
+                required_keywords_json, expected_outputs, jd
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    job["job_id"],
+                    job["source_row"],
+                    job["title"],
+                    job.get("department"),
+                    job.get("project"),
+                    job.get("headcount"),
+                    job.get("change_type"),
+                    job.get("hiring_type"),
+                    job.get("salary_min"),
+                    job.get("salary_max"),
+                    job.get("salary_months"),
+                    job.get("start_time"),
+                    job.get("status"),
+                    job.get("platform"),
+                    job.get("written_test_required"),
+                    json.dumps(job.get("required_keywords", []), ensure_ascii=False),
+                    job.get("expected_outputs"),
+                    job.get("jd", ""),
+                )
+                for job in kb.get("jobs", [])
+            ],
+        )
+
+        connection.executemany(
+            """
+            INSERT INTO concepts (canonical, category, aliases_json, frequency)
+            VALUES (?, ?, ?, ?)
+            """,
+            [
+                (
+                    concept["canonical"],
+                    concept["category"],
+                    json.dumps(concept.get("aliases", []), ensure_ascii=False),
+                    concept.get("frequency", 0),
+                )
+                for concept in kb.get("concepts", [])
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO job_concepts (job_id, canonical) VALUES (?, ?)",
+            [
+                (job["job_id"], concept)
+                for job in kb.get("jobs", [])
+                for concept in job.get("concepts", [])
+            ],
+        )
+
+        connection.executemany(
+            """
+            INSERT INTO documents (doc_id, job_id, title, kind, text)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    document["doc_id"],
+                    document["job_id"],
+                    document["title"],
+                    document["kind"],
+                    document["text"],
+                )
+                for document in kb.get("documents", [])
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO document_concepts (doc_id, canonical) VALUES (?, ?)",
+            [
+                (document["doc_id"], concept)
+                for document in kb.get("documents", [])
+                for concept in document.get("concepts", [])
+            ],
+        )
+
+    temp_path.replace(path)
+
+
+def load_knowledge_base_from_sqlite(db_path: Path | None = None) -> dict[str, Any]:
+    path = db_path or DATA_PATH
+    if not path.exists():
+        return _empty_knowledge_base()
+
+    with sqlite3.connect(path) as connection:
+        connection.row_factory = sqlite3.Row
+        metadata = {
+            row["key"]: row["value"]
+            for row in connection.execute("SELECT key, value FROM metadata")
+        }
+
+        job_concepts: dict[str, list[str]] = defaultdict(list)
+        concept_job_ids: dict[str, list[str]] = defaultdict(list)
+        for row in connection.execute(
+            "SELECT job_id, canonical FROM job_concepts ORDER BY canonical"
+        ):
+            job_concepts[row["job_id"]].append(row["canonical"])
+            concept_job_ids[row["canonical"]].append(row["job_id"])
+
+        document_concepts: dict[str, list[str]] = defaultdict(list)
+        for row in connection.execute(
+            "SELECT doc_id, canonical FROM document_concepts ORDER BY canonical"
+        ):
+            document_concepts[row["doc_id"]].append(row["canonical"])
+
+        jobs = [
+            {
+                "job_id": row["job_id"],
+                "source_row": row["source_row"],
+                "title": row["title"],
+                "department": row["department"],
+                "project": row["project"],
+                "headcount": row["headcount"],
+                "change_type": row["change_type"],
+                "hiring_type": row["hiring_type"],
+                "salary_min": row["salary_min"],
+                "salary_max": row["salary_max"],
+                "salary_months": row["salary_months"],
+                "start_time": row["start_time"],
+                "status": row["status"],
+                "platform": row["platform"],
+                "written_test_required": row["written_test_required"],
+                "required_keywords": json.loads(row["required_keywords_json"]),
+                "expected_outputs": row["expected_outputs"],
+                "jd": row["jd"],
+                "concepts": job_concepts[row["job_id"]],
+            }
+            for row in connection.execute("SELECT * FROM jobs ORDER BY job_id")
+        ]
+        concepts = [
+            {
+                "canonical": row["canonical"],
+                "category": row["category"],
+                "aliases": json.loads(row["aliases_json"]),
+                "frequency": row["frequency"],
+                "job_ids": concept_job_ids[row["canonical"]],
+            }
+            for row in connection.execute(
+                """
+                SELECT * FROM concepts
+                ORDER BY frequency DESC, category ASC, canonical ASC
+                """
+            )
+        ]
+        documents = [
+            {
+                "doc_id": row["doc_id"],
+                "job_id": row["job_id"],
+                "title": row["title"],
+                "kind": row["kind"],
+                "text": row["text"],
+                "concepts": document_concepts[row["doc_id"]],
+            }
+            for row in connection.execute("SELECT * FROM documents ORDER BY doc_id")
+        ]
+
+    return {
+        "schema_version": int(metadata.get("schema_version") or 1),
+        "generated_at": metadata.get("generated_at") or None,
+        "source": {
+            "file_name": metadata.get("source_file_name") or None,
+            "row_count": int(metadata.get("source_row_count") or 0),
+            "job_count": int(metadata.get("source_job_count") or 0),
+        },
+        "jobs": jobs,
+        "concepts": concepts,
+        "documents": documents,
+    }
+
+
+def load_default_knowledge_base() -> dict[str, Any]:
+    return load_knowledge_base_from_sqlite()
+
 
 
 def summarize_knowledge_base(kb: dict[str, Any]) -> dict[str, Any]:
