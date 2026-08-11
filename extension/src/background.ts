@@ -250,22 +250,31 @@ async function readMainWorldDomSkills(
       world: 'MAIN',
       func: extractBossVisibleSkillTags,
     });
-    const values = new Set<string>();
-    for (const { frameId, result } of results) {
-      if (frameId !== selectedFrameId) {
-        continue;
+    const collectSkills = (frameIdFilter?: number): string[] => {
+      const values = new Set<string>();
+      for (const { frameId, result } of results) {
+        if (frameIdFilter !== undefined && frameId !== frameIdFilter) {
+          continue;
+        }
+        if (!isVisibleSkillTagList(result)) {
+          continue;
+        }
+        for (const skill of result) {
+          values.add(skill);
+        }
+        if (values.size >= 20) {
+          break;
+        }
       }
-      if (!isVisibleSkillTagList(result)) {
-        continue;
-      }
-      for (const skill of result) {
-        values.add(skill);
-      }
-      if (values.size >= 20) {
-        break;
-      }
+      return Array.from(values).slice(0, 20);
+    };
+
+    const selectedFrameSkills = collectSkills(selectedFrameId);
+    if (selectedFrameSkills.length > 0) {
+      return selectedFrameSkills;
     }
-    return Array.from(values).slice(0, 20);
+
+    return collectSkills();
   } catch {
     return [];
   }

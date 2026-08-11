@@ -404,6 +404,57 @@ describe('MAIN-world resume read handler', () => {
     });
   });
 
+  it('falls back to visible DOM skills from another frame when the selected Vue frame is empty', async () => {
+    const executeScript = vi.fn()
+      .mockResolvedValueOnce([{
+        frameId: 4,
+        result: {
+          status: 'ready',
+          capability: {
+            root: 'lib-resume-recommend',
+            vue_generation: 'vue2',
+            resume_object: 'resumeInfo',
+            allowed_keys: ['geekBaseInfo'],
+            array_lengths: {},
+          },
+          schema: [{ key: 'geekBaseInfo', type: 'object' }],
+          nested_schema: [],
+          profile: {
+            display_name: '候选人跨 frame',
+            education: [],
+            work_experiences: [],
+            project_experiences: [],
+            skills: [],
+          },
+        },
+      }])
+      .mockResolvedValueOnce([
+        { frameId: 4, result: [] },
+        { frameId: 0, result: ['Java', 'Redis', 'Kafka'] },
+      ]);
+    const ocrReader = vi.fn().mockResolvedValue(['OCR 不应调用']);
+
+    const response = await resumeReadHandler()?.(
+      17,
+      executeScript,
+      () => new Date('2026-08-07T02:00:00.000Z'),
+      ocrReader,
+    );
+
+    expect(ocrReader).not.toHaveBeenCalled();
+    expect(response).toMatchObject({
+      ok: true,
+      snapshot: {
+        parser_version: 'boss-vue-v1',
+        profile: {
+          display_name: '候选人跨 frame',
+          skills: ['Java', 'Redis', 'Kafka'],
+        },
+        warnings: expect.arrayContaining(['dom-skills:visible-tags']),
+      },
+    });
+  });
+
   it('selects the valid frame with the richest mapped profile', async () => {
     const executeScript = vi.fn().mockResolvedValue([
       {
