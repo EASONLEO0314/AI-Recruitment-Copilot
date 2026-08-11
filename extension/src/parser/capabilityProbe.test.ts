@@ -90,6 +90,38 @@ describe('candidate frame capability probe', () => {
       .toHaveLength(1);
   });
 
+  it('reports multiple bounded skill probe sources in one scan', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="lib-standard-resume">
+        <div class="resume-basic">
+          <span class="name">候选人甲</span>
+          <span class="label">Java</span>
+          <span class="badge">MySQL</span>
+          <span class="label">本科</span>
+        </div>
+        <div class="ai-preference-content-option"><span class="title">Python</span></div>
+        <div class="skill-label">TypeScript</div>
+        <div class="tag-item">不得进入诊断的长篇候选人正文内容超过四十个字符用于测试过滤</div>
+        <div class="shadow-host"></div>
+      </main>`);
+    const shadow = document.querySelector('.shadow-host')?.attachShadow({ mode: 'open' });
+    shadow?.append(document.createRange().createContextualFragment(`
+      <div class="tags-wrap"><span>Docker</span></div>`));
+
+    const warnings = buildCapabilityWarnings(document);
+    const serialized = JSON.stringify(warnings);
+
+    expect(warnings).toContain('probe:skill=profile-header:2:Java|MySQL');
+    expect(warnings).toContain('probe:skill=shadow-tag:1:Docker');
+    expect(warnings).toContain('probe:skill=preference-option:1:Python');
+    expect(warnings).toContain('probe:skill=skill-class:1:TypeScript');
+    expect(serialized).not.toContain('本科');
+    expect(serialized).not.toContain('不得进入诊断');
+    expect(clickSpy).not.toHaveBeenCalled();
+    expect(focusSpy).not.toHaveBeenCalled();
+    expect(scrollSpy).not.toHaveBeenCalled();
+  });
+
   it('does not treat text from a hidden heading child as visible evidence', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <h2><span hidden>工作经历</span></h2>

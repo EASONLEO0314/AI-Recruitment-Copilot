@@ -49,6 +49,13 @@ const STRUCTURE_CLASS_FORMAT = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
 const STRUCTURE_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline)/i;
 const STRUCTURE_TOPOLOGY_CLASS_KEYWORD = /(?:resume|geek|candidate|recommend|history|experience|education|project|advantage|detail|work|school|company|position|degree|major|timeline|title|item|content|section|box|header|body|summary|greet)/i;
 const PROBE_PATH_TAG_FORMAT = /^[a-z][a-z0-9-]{0,15}$/;
+const SKILL_PROBE_LABELS = {
+  'profile-header': '顶部信息',
+  'shadow-tag': 'Shadow 标签',
+  'preference-option': '偏好标签',
+  'skill-class': '技能 class',
+  'tag-class': '标签 class',
+} as const;
 
 const PAGE_KIND_LABELS: Readonly<Record<PageKind, string>> = {
   logged_out: '未登录',
@@ -164,6 +171,15 @@ function safeProbePath(value: string): string | undefined {
 }
 
 
+function safeSkillProbeSamples(value: string): string[] {
+  return value
+    .split('|')
+    .map((sample) => sample.trim())
+    .filter((sample) => /^[\p{Script=Han}A-Za-z0-9#+. _-]{1,40}$/u.test(sample))
+    .slice(0, 3);
+}
+
+
 function FrameDiagnostics({
   frames,
   selectedFrameId,
@@ -206,6 +222,21 @@ function FrameDiagnostics({
             const path = warning ? safeProbePath(warning.slice(prefix.length)) : undefined;
             return path ? [{ kind, path }] : [];
           });
+        const skillProbes = frame.warnings.flatMap((warning) => {
+          const match = warning.match(
+            /^probe:skill=(profile-header|shadow-tag|preference-option|skill-class|tag-class):([1-9][0-9]?):(.{1,120})$/,
+          );
+          if (!match) {
+            return [];
+          }
+          const count = Number(match[2]);
+          const samples = safeSkillProbeSamples(match[3]);
+          if (!Number.isInteger(count) || count < 1 || count > 50 || samples.length === 0) {
+            return [];
+          }
+          const source = match[1] as keyof typeof SKILL_PROBE_LABELS;
+          return [{ source, count, samples }];
+        }).slice(0, 5);
         const facts = [
           visibleElements !== undefined ? `元素 ${visibleElements}` : undefined,
           iframeCount !== undefined ? `iframe ${iframeCount}` : undefined,
@@ -223,6 +254,11 @@ function FrameDiagnostics({
             </b>
             {facts.length > 0 && <span>{facts.join(' · ')}</span>}
             {headings.length > 0 && <span>栏目：{headings.join('、')}</span>}
+            {skillProbes.map(({ source, count, samples }) => (
+              <small key={source}>
+                技能探针：{SKILL_PROBE_LABELS[source]} {count} 个 · {samples.join('、')}
+              </small>
+            ))}
             {paths.map(({ kind, path }) => (
               <small key={kind}>{HEADING_LABELS[kind]}路径：{path}</small>
             ))}

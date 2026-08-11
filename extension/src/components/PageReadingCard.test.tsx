@@ -210,8 +210,11 @@ describe('PageReadingCard', () => {
               'probe:wasm-class-count=1',
               'probe:heading=work:1',
               'probe:heading=education:1',
+              'probe:skill=profile-header:2:Java|MySQL',
+              'probe:skill=shadow-tag:1:Docker',
               'probe:heading-path=work:main.resume-layout>section.work-experience>h2.title',
               'probe:heading-path=education:private candidate text',
+              'probe:skill=tag-class:1:private:candidate:text',
             ],
           },
         ]}
@@ -230,10 +233,13 @@ describe('PageReadingCard', () => {
     expect(screen.getByText(/Canvas 0/)).toBeInTheDocument();
     expect(screen.getByText(/WASM 1/)).toBeInTheDocument();
     expect(screen.getByText('栏目：工作×1、教育×1')).toBeInTheDocument();
+    expect(screen.getByText('技能探针：顶部信息 2 个 · Java、MySQL')).toBeInTheDocument();
+    expect(screen.getByText('技能探针：Shadow 标签 1 个 · Docker')).toBeInTheDocument();
     expect(screen.getByText(
       '工作路径：main.resume-layout → section.work-experience → h2.title',
     )).toBeInTheDocument();
     expect(screen.queryByText(/private candidate text/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/private:candidate:text/)).not.toBeInTheDocument();
   });
 
   it('never renders warning codes or arbitrary warning text verbatim', () => {
