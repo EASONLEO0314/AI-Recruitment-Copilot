@@ -87,6 +87,57 @@ describe('visible BOSS skill tag extractor', () => {
     ]);
   });
 
+  it('extracts grouped text skills from the resume header block', () => {
+    document.body.innerHTML = `
+      <section class="dialog-lib-resume">
+        <div class="lib-resume-recommend">
+          <div class="resume-detail-wrap">
+            <div class="resume-header">
+              <h1>候选人文本技能</h1>
+              <p>23岁 | 本科 | 1年 | 离职-随时到岗</p>
+              <div>后端开发</div>
+              <p>Java、Spring全家桶、SpringCloud微服务、MyBatis、MySQL优化、Redis、RabbitMQ、Spring AI大模型应用开发</p>
+              <div>前端开发</div>
+              <p>HTML/CSS/JS、Vue、uni-app跨端开发</p>
+              <div>测试校验</div>
+              <p>Apifox/Postman接口调试、JMeter压测、Python+Selenium自动化测试、Allure测试报告</p>
+              <div>工程&上线部署</div>
+              <p>Git版本管理、Maven构建、Linux运维、Docker容器化部署</p>
+              <div>一句话总结</div>
+              <p>可独立完成前后端编码，依托 Git、Maven 管控工程。</p>
+            </div>
+            <section class="resume-section geek-work-experience-wrap">
+              <h2>工作经历</h2>
+              <p>不应从工作正文继续扩散读取</p>
+            </section>
+          </div>
+        </div>
+      </section>`;
+    markTreeVisible(document);
+
+    expect(extractBossVisibleSkillTags()).toEqual([
+      'Java',
+      'Spring全家桶',
+      'SpringCloud微服务',
+      'MyBatis',
+      'MySQL优化',
+      'Redis',
+      'RabbitMQ',
+      'Spring AI大模型应用开发',
+      'HTML/CSS/JS',
+      'Vue',
+      'uni-app跨端开发',
+      'Apifox/Postman接口调试',
+      'JMeter压测',
+      'Python+Selenium自动化测试',
+      'Allure测试报告',
+      'Git版本管理',
+      'Maven构建',
+      'Linux运维',
+      'Docker容器化部署',
+    ]);
+  });
+
   it('ignores the extension shadow UI while scanning the page', () => {
     document.body.innerHTML = `
       <section class="lib-resume-recommend">

@@ -60,6 +60,9 @@ export function extractBossVisibleSkillTags(): string[] {
   const nonSkillPattern = /^(?:优势|亮点|标签|技能|工作|教育|项目|简历|候选人|推荐|未读|已读|查看|联系|沟通|打招呼|聊一聊|感兴趣|不合适|举报|反馈|当前岗位|字段覆盖率|演示数据|匹配度|非常匹配.*|建议联系.*|招聘规范|我的客服|面试|招聘数据|账号权益|升级VIP|首充礼|筛选|最近关注|职位管理|牛人管理|工具箱|客户端|立即下载|新|本科|硕士|博士|大专|高中|中专|学历|男|女|活跃|今日活跃|刚刚活跃|在线|离线|在职.*|离职.*|随时到岗|应届生|.+专业|.+工程师|.+经理|.+主管|.+负责人|.+顾问|.+专家|.+架构师|\d+|\d+\s*(?:年|岁)(?:经验)?|\d+\s*[-~]\s*\d+\s*年(?:经验)?|\d+\s*[-~]\s*\d+\s*[kK]?)$/;
   const noisyTextPattern = /\d+\s*[-~]\s*\d+\s*[kK]/i;
   const sampleFormat = /^[\p{Script=Han}A-Za-z0-9#+. _/-]{1,40}$/u;
+  const textSkillHeadingPattern = /^(?:专业技能|技能标签|技能特长|个人技能|技术栈|后端开发|前端开发|测试校验|测试经验|测试开发|工程\s*[&和及与/]\s*上线部署|工程化工具|运维部署|数据库(?:与中间件)?|编程语言(?:与框架)?|软件测试(?:与质量保障)?|需求(?:与产品实施)?|高效开发提效工具)$/;
+  const textSkillHeadingPrefixPattern = /^(?:专业技能|技能标签|技能特长|个人技能|技术栈|后端开发|前端开发|测试校验|测试经验|测试开发|工程\s*[&和及与/]\s*上线部署|工程化工具|运维部署|数据库(?:与中间件)?|编程语言(?:与框架)?|软件测试(?:与质量保障)?|需求(?:与产品实施)?|高效开发提效工具)\s*[:：\-—]?\s*/;
+  const textSkillStopPattern = /^(?:一句话总结|最近关注|工作经历|工作经验|教育经历|教育背景|项目经历|项目经验|经历概览|求职意向)$/;
 
   const normalize = (value: string | null | undefined, maximum = 80): string => (
     (value ?? '').replace(/\s+/g, ' ').trim().slice(0, maximum)
@@ -181,6 +184,11 @@ export function extractBossVisibleSkillTags(): string[] {
       .some((child) => child !== element && isTagElement(child))
   );
 
+  const hasVisibleTextChild = (element: Element): boolean => (
+    Array.from(element.children)
+      .some((child) => isVisible(child) && normalize(child.textContent, 120).length > 0)
+  );
+
   const addSkill = (skills: Set<string>, value: string): void => {
     const normalized = normalize(value);
     const compact = normalized.replace(/\s+/g, '');
@@ -198,6 +206,73 @@ export function extractBossVisibleSkillTags(): string[] {
     skills.add(normalized);
   };
 
+  const stripSkillHeadingPrefix = (value: string): string => {
+    return normalize(normalize(value, 500).replace(textSkillHeadingPrefixPattern, ''), 500);
+  };
+
+  const addDelimitedSkillText = (skills: Set<string>, value: string): void => {
+    const stripped = stripSkillHeadingPrefix(value);
+    for (const fragment of stripped.split(/[、,，;；]+|\s{2,}/)) {
+      const candidate = normalize(
+        fragment
+          .replace(/^[（(]?\d+[.)、]\s*/, '')
+          .replace(/[。.!！]+$/, ''),
+        80,
+      );
+      addSkill(skills, candidate);
+    }
+  };
+
+  const visibleLeafTexts = (root: Element): string[] => {
+    const texts: string[] = [];
+    for (const element of deepElements(root)) {
+      if (!isVisible(element) || hasVisibleTextChild(element)) {
+        continue;
+      }
+      const text = normalize(element.textContent, 500);
+      if (text) {
+        texts.push(text);
+      }
+      if (texts.length >= 120) {
+        break;
+      }
+    }
+    return texts;
+  };
+
+  const addTextBlockSkills = (skills: Set<string>): void => {
+    for (const root of preferredScanRoots()) {
+      let active = false;
+      let consumedLines = 0;
+      for (const text of visibleLeafTexts(root)) {
+        const compact = text.replace(/\s+/g, '');
+        if (textSkillStopPattern.test(compact)) {
+          active = false;
+          if (consumedLines > 0) {
+            break;
+          }
+          continue;
+        }
+        if (textSkillHeadingPattern.test(compact)) {
+          active = true;
+          consumedLines = 0;
+          continue;
+        }
+        if (!active) {
+          continue;
+        }
+        addDelimitedSkillText(skills, text);
+        consumedLines += 1;
+        if (skills.size >= maxSkills || consumedLines >= 10) {
+          break;
+        }
+      }
+      if (skills.size >= maxSkills) {
+        break;
+      }
+    }
+  };
+
   const values = new Set<string>();
   for (const root of scanContainers()) {
     for (const element of deepQuerySelectorAll(root, selector)) {
@@ -212,6 +287,9 @@ export function extractBossVisibleSkillTags(): string[] {
     if (values.size >= maxSkills) {
       break;
     }
+  }
+  if (values.size < maxSkills) {
+    addTextBlockSkills(values);
   }
 
   return Array.from(values).slice(0, maxSkills);
