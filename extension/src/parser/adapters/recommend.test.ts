@@ -121,6 +121,48 @@ describe('recommend frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('merges skills from a nearby dialog header when the resume body has no skills', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="recommend-wrap">
+        <div class="dialog-lib-resume">
+          <div class="resume-basic">
+            <h1 class="resume-name">候选人 Header</h1>
+            <div class="base-info"><span>杭州</span><span>3 年经验</span><span>本科</span></div>
+            <div class="profile-tags">
+              <span class="label">Go</span>
+              <span class="badge">Kubernetes</span>
+            </div>
+          </div>
+          <div class="lib-standard-resume">
+            <section class="resume-item">
+              <h2 class="section-title">工作经历</h2>
+              <article class="history-item">
+                <span class="company-name">示例平台</span>
+                <span class="position-name">后端工程师</span>
+              </article>
+            </section>
+          </div>
+        </div>
+      </main>`);
+
+    const snapshot = parseRecommendFrame(document, capturedAt);
+
+    expect(snapshot.profile).toMatchObject({
+      display_name: '候选人 Header',
+      location: '杭州',
+      experience_years: 3,
+      skills: ['Go', 'Kubernetes'],
+      work_experiences: [{
+        company: '示例平台',
+        title: '后端工程师',
+      }],
+    });
+    expect(snapshot.profile?.skills).not.toContain('杭州');
+    expect(snapshot.profile?.skills).not.toContain('3 年经验');
+    expect(snapshot.profile?.skills).not.toContain('本科');
+    expectNoPageOperations();
+  });
+
   it('reads current BOSS resume-section work and education entries', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="dialog-lib-resume">

@@ -29,6 +29,11 @@ const MODERN_RESUME_ROOT_SELECTORS = [
   '.wasm-resume-layout',
   '.lib-resume-recommend',
 ];
+const NEARBY_RESUME_HEADER_ROOT_SELECTOR = [
+  '.dialog-lib-resume',
+  '.lib-resume-recommend',
+  '.resume-detail-wrap',
+].join(', ');
 
 const LOCATION_EXCLUSIONS = /年|学历|本科|硕士|博士|大专/;
 const STRUCTURE_CLASS_FORMAT = /^[A-Za-z][A-Za-z0-9_-]{0,47}$/;
@@ -220,6 +225,47 @@ function findModernResumeRoot(document: Document): Element | undefined {
 }
 
 
+function nearbyResumeHeaderRoot(resumeRoot: Element): Element | undefined {
+  const root = resumeRoot.closest(NEARBY_RESUME_HEADER_ROOT_SELECTOR);
+  return root && !isHidden(root) ? root : undefined;
+}
+
+
+function withNearbyHeaderSkills(
+  snapshot: ParserSnapshot,
+  resumeRoot: Element,
+  now: Date,
+): ParserSnapshot {
+  if (!snapshot.profile || snapshot.profile.skills.length > 0) {
+    return snapshot;
+  }
+
+  const headerRoot = nearbyResumeHeaderRoot(resumeRoot);
+  if (!headerRoot || headerRoot === resumeRoot) {
+    return snapshot;
+  }
+
+  const headerSnapshot = parseResumeRoot(headerRoot, 'recommend_frame', now);
+  const headerProfile = headerSnapshot.profile;
+  if (!headerProfile || headerProfile.skills.length === 0) {
+    return snapshot;
+  }
+
+  const merged = buildProfileSnapshot('recommend_frame', {
+    ...snapshot.profile,
+    display_name: snapshot.profile.display_name ?? headerProfile.display_name,
+    location: snapshot.profile.location ?? headerProfile.location,
+    experience_years: snapshot.profile.experience_years ?? headerProfile.experience_years,
+    skills: headerProfile.skills,
+  }, new Date(snapshot.captured_at));
+  return {
+    ...merged,
+    parser_version: snapshot.parser_version,
+    warnings: snapshot.warnings,
+  };
+}
+
+
 export function findRecommendObservationRoot(document: Document): Element | null {
   return Array.from(document.querySelectorAll(OBSERVATION_ROOT_SELECTOR))
     .find((element) => !isHidden(element)) ?? null;
@@ -229,7 +275,11 @@ export function findRecommendObservationRoot(document: Document): Element | null
 export function parseRecommendFrame(document: Document, now: Date): ParserSnapshot {
   const resumeRoot = findModernResumeRoot(document);
   if (resumeRoot) {
-    const snapshot = parseResumeRoot(resumeRoot, 'recommend_frame', now);
+    const snapshot = withNearbyHeaderSkills(
+      parseResumeRoot(resumeRoot, 'recommend_frame', now),
+      resumeRoot,
+      now,
+    );
     const hasProfileEvidence = snapshot.present_fields
       .some((field) => PROFILE_EVIDENCE_FIELDS.has(field));
     if (hasProfileEvidence) {

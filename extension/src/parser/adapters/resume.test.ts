@@ -159,6 +159,45 @@ describe('resume frame adapter', () => {
     expectNoPageOperations();
   });
 
+  it('reads profile header skills rendered inside an open shadow root', () => {
+    document.body.insertAdjacentHTML('beforeend', `
+      <main class="resume-content">
+        <div class="resume-basic shadow-host"></div>
+        <section class="resume-item">
+          <h2 class="section-title">工作经历</h2>
+          <article class="history-item">
+            <span class="company-name">示例公司</span>
+            <span class="position-name">算法工程师</span>
+          </article>
+        </section>
+      </main>`);
+    const shadow = document.querySelector('.shadow-host')?.attachShadow({ mode: 'open' });
+    shadow?.append(document.createRange().createContextualFragment(`
+      <div class="resume-basic">
+        <h1 class="resume-name">候选人 Shadow</h1>
+        <div class="base-info">
+          <span>广州</span>
+          <span>2 年经验</span>
+          <span>硕士</span>
+        </div>
+        <div class="tags-wrap">
+          <span>Python</span>
+          <span>PyTorch</span>
+        </div>
+      </div>`));
+
+    const snapshot = parseResumeFrame(document, capturedAt);
+
+    expect(snapshot.profile).toMatchObject({
+      display_name: '候选人 Shadow',
+      skills: ['Python', 'PyTorch'],
+    });
+    expect(snapshot.profile?.skills).not.toContain('广州');
+    expect(snapshot.profile?.skills).not.toContain('2 年经验');
+    expect(snapshot.profile?.skills).not.toContain('硕士');
+    expectNoPageOperations();
+  });
+
   it('returns unsupported when no recognized resume root exists', () => {
     document.body.insertAdjacentHTML('beforeend', `
       <div class="unrelated-page">

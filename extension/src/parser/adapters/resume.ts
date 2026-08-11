@@ -6,7 +6,7 @@ import type {
   WorkExperience,
 } from '../../contracts';
 import { RESUME_ITEM_RAW_TEXT_MAX_LENGTH } from '../../contracts';
-import { allTexts, firstText, isHidden, visibleText } from '../dom';
+import { firstText, isHidden, visibleText } from '../dom';
 import {
   buildProfileSnapshot,
   buildStatusSnapshot,
@@ -128,6 +128,100 @@ interface ParsedSection<T> {
 interface RawItemText {
   rawText?: string;
   truncated: boolean;
+}
+
+
+function scopedSelector(selector: string, scope: ParentNode): string {
+  return scope instanceof Element ? selector : selector.replace(/:scope\s+/g, '');
+}
+
+
+function deepElements(root: Element, maxElements = 500): Element[] {
+  const elements: Element[] = [];
+  const visit = (scope: ParentNode): void => {
+    if (elements.length >= maxElements) {
+      return;
+    }
+
+    for (const element of Array.from(scope.children)) {
+      if (elements.length >= maxElements) {
+        return;
+      }
+      elements.push(element);
+      if (element.shadowRoot) {
+        visit(element.shadowRoot);
+      }
+      visit(element);
+    }
+  };
+
+  elements.push(root);
+  if (root.shadowRoot) {
+    visit(root.shadowRoot);
+  }
+  visit(root);
+  return elements.slice(0, maxElements);
+}
+
+
+function deepQuerySelectorAll(root: Element, selector: string, maxElements = 500): Element[] {
+  const matches: Element[] = [];
+  const seen = new Set<Element>();
+  const scopes: ParentNode[] = [root];
+  for (const element of deepElements(root, maxElements)) {
+    if (element.shadowRoot) {
+      scopes.push(element.shadowRoot);
+    }
+  }
+
+  for (const scope of scopes) {
+    for (const element of Array.from(scope.querySelectorAll(scopedSelector(selector, scope)))) {
+      if (!seen.has(element)) {
+        seen.add(element);
+        matches.push(element);
+      }
+      if (matches.length >= maxElements) {
+        return matches;
+      }
+    }
+  }
+
+  return matches;
+}
+
+
+function firstTextDeep(
+  root: Element,
+  selectors: readonly string[],
+  maxLength = 160,
+): string | undefined {
+  for (const selector of selectors) {
+    for (const element of deepQuerySelectorAll(root, selector)) {
+      if (isHidden(element)) {
+        continue;
+      }
+      const value = normalizeText(element.textContent, maxLength);
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return undefined;
+}
+
+
+function allTextsDeep(
+  root: Element,
+  selectors: readonly string[],
+  maxLength = 160,
+): string[] {
+  const values = selectors.flatMap((selector) =>
+    deepQuerySelectorAll(root, selector)
+      .filter((element) => !isHidden(element))
+      .map((element) => normalizeText(element.textContent, maxLength))
+      .filter(Boolean));
+
+  return [...new Set(values)].slice(0, 50);
 }
 
 
@@ -318,7 +412,7 @@ function addProfileHeaderSkillText(
 
 function collectSkillTokens(container: Element, heading: Element): string[] {
   const values = new Set<string>();
-  for (const element of Array.from(container.querySelectorAll(SKILL_TOKEN_SELECTORS))) {
+  for (const element of deepQuerySelectorAll(container, SKILL_TOKEN_SELECTORS)) {
     if (element === heading || element.contains(heading) || isHidden(element)) {
       continue;
     }
@@ -339,15 +433,25 @@ function collectSkillTokens(container: Element, heading: Element): string[] {
 
 
 function profileNameElement(root: Element): Element | undefined {
-  return Array.from(root.querySelectorAll('.resume-name, .geek-name, .name'))
+  return deepQuerySelectorAll(root, '.resume-name, .geek-name, .name')
     .find((element) => !isHidden(element));
+}
+
+
+function fallbackProfileHeaderContainers(root: Element): Element[] {
+  return deepQuerySelectorAll(root, PROFILE_HEADER_ROOTS)
+    .filter((container) =>
+      !isHidden(container)
+      && visibleText(container, 801).length <= 800
+      && deepQuerySelectorAll(container, PROFILE_HEADER_SKILL_SELECTORS, 80).length > 0)
+    .slice(0, 3);
 }
 
 
 function profileHeaderContainers(root: Element): Element[] {
   const nameElement = profileNameElement(root);
   if (!nameElement) {
-    return [];
+    return fallbackProfileHeaderContainers(root);
   }
 
   const containers: Element[] = [];
@@ -370,7 +474,9 @@ function profileHeaderContainers(root: Element): Element[] {
   return [...new Set(containers)]
     .filter((container) =>
       visibleText(container, 801).length <= 800
-      && container.querySelector(PROFILE_HEADER_SKILL_SELECTORS) !== null)
+      && deepQuerySelectorAll(container, PROFILE_HEADER_SKILL_SELECTORS, 80).length > 0)
+    .concat(fallbackProfileHeaderContainers(root))
+    .filter((container, index, all) => all.indexOf(container) === index)
     .slice(0, 3);
 }
 
@@ -381,7 +487,7 @@ function skillTextsNearProfileHeader(
 ): string[] {
   const values = new Set<string>();
   for (const container of profileHeaderContainers(root)) {
-    const elements = Array.from(container.querySelectorAll(PROFILE_HEADER_SKILL_SELECTORS))
+    const elements = deepQuerySelectorAll(container, PROFILE_HEADER_SKILL_SELECTORS, 80)
       .filter((element) => !isHidden(element))
       .slice(0, 80);
     for (const element of elements) {
@@ -417,7 +523,7 @@ function nearbySkillContainers(heading: Element, root: Element): Element[] {
 
 function skillTextsNearHeadings(root: Element): string[] {
   const values = new Set<string>();
-  const elements = [root, ...Array.from(root.querySelectorAll('*')).slice(0, 500)];
+  const elements = deepElements(root, 500);
   const headings = elements.filter((element) => !isHidden(element) && isSkillHeading(element));
 
   for (const heading of headings) {
@@ -475,7 +581,7 @@ export function parseResumeRoot(
     }
   }
 
-  const baseInfo = allTexts(
+  const baseInfo = allTextsDeep(
     root,
     [
       '.base-info span',
@@ -490,14 +596,14 @@ export function parseResumeRoot(
   const location = baseInfo[0] && !LOCATION_EXCLUSIONS.test(baseInfo[0])
     ? baseInfo[0]
     : undefined;
-  const displayName = firstText(root, ['.resume-name', '.geek-name', '.name'], 80);
+  const displayName = firstTextDeep(root, ['.resume-name', '.geek-name', '.name'], 80);
   const excludedHeaderTexts = new Set(
     [displayName, location, experienceText]
       .filter((value): value is string => Boolean(value))
       .flatMap((value) => [value, value.replace(/\s+/g, '')]),
   );
   const skills = [
-    ...allTexts(
+    ...allTextsDeep(
       root,
       [
         '.skills .tag-item',
@@ -519,7 +625,7 @@ export function parseResumeRoot(
     work_experiences: workExperiences,
     project_experiences: projectExperiences,
     skills: [...new Set(skills)].slice(0, 50),
-    summary: firstText(
+    summary: firstTextDeep(
       root,
       ['.candidate-advantage', '.self-description', '.geek-desc .content', '.geek-desc'],
       500,
