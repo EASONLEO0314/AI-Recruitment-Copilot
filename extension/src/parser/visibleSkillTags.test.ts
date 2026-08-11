@@ -73,6 +73,10 @@ describe('visible BOSS skill tag extractor', () => {
         <div class="resume-basic">
           <span class="boss-tag">全栈开发工程师 - 北京 10-11K</span>
           <span class="boss-tag">计算机专业</span>
+          <span class="boss-tag">3个月</span>
+          <span class="boss-tag">06 - 2024.09</span>
+          <span class="boss-tag">北方民族大学</span>
+          <span class="boss-tag">合肥工业大学</span>
           <span class="boss-tag">MySQL</span>
           <span class="boss-tag">微服务开发</span>
           <span class="boss-tag">系统联调</span>
@@ -84,6 +88,37 @@ describe('visible BOSS skill tag extractor', () => {
       'MySQL',
       '微服务开发',
       '系统联调',
+    ]);
+  });
+
+  it('falls back to technical keywords without keeping school and date tags', () => {
+    document.body.innerHTML = `
+      <section class="dialog-lib-resume">
+        <div class="lib-resume-recommend">
+          <div class="resume-detail-wrap">
+            <div class="resume-basic">
+              <span class="boss-tag">3个月</span>
+              <span class="boss-tag">06 - 2024.09</span>
+              <span class="boss-tag">北方民族大学</span>
+              <span class="boss-tag">合肥工业大学</span>
+            </div>
+            <section class="resume-section geek-work-experience-wrap">
+              <h2>工作经历</h2>
+              <p>Java · 产业金融部门</p>
+              <p>基于 Redis SET NX + EX 实现 Kafka 消费幂等控制。</p>
+              <p>使用 Redis ZSet、ClickHouse 优化 IoT 数据处理链路。</p>
+            </section>
+          </div>
+        </div>
+      </section>`;
+    markTreeVisible(document);
+
+    expect(extractBossVisibleSkillTags()).toEqual([
+      'Java',
+      'Redis',
+      'Kafka',
+      'ClickHouse',
+      'IoT',
     ]);
   });
 

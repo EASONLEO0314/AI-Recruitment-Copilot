@@ -57,9 +57,41 @@ export function extractBossVisibleSkillTags(): string[] {
     '[class]',
   ].join(', ');
   const tagClassPattern = /(?:^|[-_])(?:tags?|skills?|label|badge)(?:$|[-_])/i;
-  const nonSkillPattern = /^(?:优势|亮点|标签|技能|工作|教育|项目|简历|候选人|推荐|未读|已读|查看|联系|沟通|打招呼|聊一聊|感兴趣|不合适|举报|反馈|当前岗位|字段覆盖率|演示数据|匹配度|非常匹配.*|建议联系.*|招聘规范|我的客服|面试|招聘数据|账号权益|升级VIP|首充礼|筛选|最近关注|职位管理|牛人管理|工具箱|客户端|立即下载|新|本科|硕士|博士|大专|高中|中专|学历|男|女|活跃|今日活跃|刚刚活跃|在线|离线|在职.*|离职.*|随时到岗|应届生|.+专业|.+工程师|.+经理|.+主管|.+负责人|.+顾问|.+专家|.+架构师|\d+|\d+\s*(?:年|岁)(?:经验)?|\d+\s*[-~]\s*\d+\s*年(?:经验)?|\d+\s*[-~]\s*\d+\s*[kK]?)$/;
+  const nonSkillPattern = /^(?:优势|亮点|标签|技能|工作|教育|项目|简历|候选人|推荐|未读|已读|查看|联系|沟通|打招呼|聊一聊|感兴趣|不合适|举报|反馈|当前岗位|字段覆盖率|演示数据|匹配度|非常匹配.*|建议联系.*|招聘规范|我的客服|面试|招聘数据|账号权益|升级VIP|首充礼|筛选|最近关注|职位管理|牛人管理|工具箱|客户端|立即下载|新|本科|硕士|博士|大专|高中|中专|学历|男|女|活跃|今日活跃|刚刚活跃|在线|离线|在职.*|离职.*|随时到岗|应届生|.+专业|.+工程师|.+经理|.+主管|.+负责人|.+顾问|.+专家|.+架构师|.+(?:大学|学院|学校|中学|职校|技校)|\d+|\d+\s*(?:个)?月|\d+\s*(?:年|岁)(?:经验|应届生)?|\d+\s*[-~]\s*\d+\s*年(?:经验)?|\d+\s*[-~]\s*\d+\s*[kK]?)$/;
   const noisyTextPattern = /\d+\s*[-~]\s*\d+\s*[kK]/i;
+  const dateLikePattern = /^(?:(?:19|20)?\d{2}(?:[./-]\d{1,2})?|\d{1,2})\s*[-–—至到]\s*(?:至今|现在|当前|(?:19|20)\d{2}(?:[./-]\d{1,2})?)$/;
   const sampleFormat = /^[\p{Script=Han}A-Za-z0-9#+. _/-]{1,40}$/u;
+  const technicalSkillPatterns: Array<[string, RegExp]> = [
+    ['Spring Cloud', /Spring\s*Cloud|SpringCloud/i],
+    ['Spring Boot', /Spring\s*Boot/i],
+    ['Spring AI', /Spring\s*AI/i],
+    ['JavaScript', /\bJavaScript\b/i],
+    ['TypeScript', /\bTypeScript\b/i],
+    ['ClickHouse', /\bClickHouse\b/i],
+    ['RabbitMQ', /\bRabbitMQ\b/i],
+    ['MyBatis', /\bMyBatis\b/i],
+    ['PostgreSQL', /\bPostgreSQL\b/i],
+    ['Selenium', /\bSelenium\b/i],
+    ['JMeter', /\bJMeter\b/i],
+    ['Apifox', /\bApifox\b/i],
+    ['Postman', /\bPostman\b/i],
+    ['Docker', /\bDocker\b/i],
+    ['Kubernetes', /\bKubernetes\b|\bK8s\b/i],
+    ['Kafka', /\bKafka\b/i],
+    ['Redis', /\bRedis\b/i],
+    ['MySQL', /\bMySQL\b/i],
+    ['Linux', /\bLinux\b/i],
+    ['Maven', /\bMaven\b/i],
+    ['Python', /\bPython\b/i],
+    ['Java', /\bJava\b/],
+    ['Vue', /\bVue\d?\b/i],
+    ['React', /\bReact\b/i],
+    ['HTML/CSS/JS', /HTML\s*\/\s*CSS\s*\/\s*JS/i],
+    ['uni-app', /\buni-app\b/i],
+    ['IoT', /\bIoT\b/i],
+    ['SQL', /\bSQL\b/i],
+    ['Git', /\bGit\b/i],
+  ];
   const textSkillHeadingPattern = /^(?:专业技能|技能标签|技能特长|个人技能|技术栈|后端开发|前端开发|测试校验|测试经验|测试开发|工程\s*[&和及与/]\s*上线部署|工程化工具|运维部署|数据库(?:与中间件)?|编程语言(?:与框架)?|软件测试(?:与质量保障)?|需求(?:与产品实施)?|高效开发提效工具)$/;
   const textSkillHeadingPrefixPattern = /^(?:专业技能|技能标签|技能特长|个人技能|技术栈|后端开发|前端开发|测试校验|测试经验|测试开发|工程\s*[&和及与/]\s*上线部署|工程化工具|运维部署|数据库(?:与中间件)?|编程语言(?:与框架)?|软件测试(?:与质量保障)?|需求(?:与产品实施)?|高效开发提效工具)\s*[:：\-—]?\s*/;
   const textSkillStopPattern = /^(?:一句话总结|最近关注|工作经历|工作经验|教育经历|教育背景|项目经历|项目经验|经历概览|求职意向)$/;
@@ -197,6 +229,8 @@ export function extractBossVisibleSkillTags(): string[] {
       || nonSkillPattern.test(compact)
       || noisyTextPattern.test(normalized)
       || noisyTextPattern.test(compact)
+      || dateLikePattern.test(normalized)
+      || dateLikePattern.test(compact)
       || (/^[\p{Script=Han}\s]+$/u.test(normalized) && normalized.length > 10)
       || !sampleFormat.test(normalized)
       || normalized.includes('|')
@@ -273,6 +307,28 @@ export function extractBossVisibleSkillTags(): string[] {
     }
   };
 
+  const addTechnicalKeywordSkills = (skills: Set<string>): void => {
+    const matches: Array<{ skill: string; index: number; order: number }> = [];
+    const text = preferredScanRoots()
+      .map((root) => normalize(root.textContent, 10_000))
+      .join(' ');
+    technicalSkillPatterns.forEach(([skill, pattern], order) => {
+      const match = text.match(pattern);
+      if (match?.index !== undefined) {
+        matches.push({ skill, index: match.index, order });
+      }
+    });
+
+    matches
+      .sort((left, right) =>
+        (left.index - right.index) || (left.order - right.order))
+      .forEach(({ skill }) => {
+        if (skills.size < maxSkills) {
+          addSkill(skills, skill);
+        }
+      });
+  };
+
   const values = new Set<string>();
   for (const root of scanContainers()) {
     for (const element of deepQuerySelectorAll(root, selector)) {
@@ -290,6 +346,9 @@ export function extractBossVisibleSkillTags(): string[] {
   }
   if (values.size < maxSkills) {
     addTextBlockSkills(values);
+  }
+  if (values.size === 0) {
+    addTechnicalKeywordSkills(values);
   }
 
   return Array.from(values).slice(0, maxSkills);
