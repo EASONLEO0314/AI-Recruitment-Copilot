@@ -53,6 +53,40 @@ describe('visible BOSS skill tag extractor', () => {
     ]);
   });
 
+  it('ignores BOSS global chrome and scans only candidate resume containers', () => {
+    document.body.innerHTML = `
+      <header class="boss-top-banner">
+        <span class="boss-tag">44</span>
+        <span class="boss-tag">新</span>
+        <span class="boss-tag">招聘规范</span>
+        <span class="boss-tag">我的客服</span>
+        <span class="boss-tag">面试</span>
+        <span class="boss-tag">招聘数据</span>
+        <span class="boss-tag">账号权益</span>
+        <span class="boss-tag">升级VIP</span>
+      </header>
+      <aside class="boss-side-banner">
+        <span class="boss-tag">首充礼</span>
+        <span class="boss-tag">立即下载</span>
+      </aside>
+      <section class="dialog-lib-resume">
+        <div class="resume-basic">
+          <span class="boss-tag">全栈开发工程师 - 北京 10-11K</span>
+          <span class="boss-tag">计算机专业</span>
+          <span class="boss-tag">MySQL</span>
+          <span class="boss-tag">微服务开发</span>
+          <span class="boss-tag">系统联调</span>
+        </div>
+      </section>`;
+    markTreeVisible(document);
+
+    expect(extractBossVisibleSkillTags()).toEqual([
+      'MySQL',
+      '微服务开发',
+      '系统联调',
+    ]);
+  });
+
   it('ignores the extension shadow UI while scanning the page', () => {
     document.body.innerHTML = `
       <section class="lib-resume-recommend">

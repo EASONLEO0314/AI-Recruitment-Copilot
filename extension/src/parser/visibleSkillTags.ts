@@ -5,6 +5,35 @@
 export function extractBossVisibleSkillTags(): string[] {
   const maxElements = 2_000;
   const maxSkills = 20;
+  const scanRootSelector = [
+    '.dialog-lib-resume',
+    '.lib-resume-recommend',
+    '.lib-resume-anonymous',
+    '.resume-detail-wrap',
+    '.resume-layout-wrap',
+    '.wasm-resume-layout',
+    '.resume-content',
+    '.resume-box',
+    '.geek-resume',
+  ].join(', ');
+  const scanContainerSelector = [
+    '.resume-basic',
+    '.resume-header',
+    '.profile-info',
+    '.geek-base-info',
+    '.base-info-wrap',
+    '.candidate-info',
+    '.resume-top',
+    '.resume-name-wrap',
+    '.name-wrap',
+    '.geek-info',
+    '.profile-tags',
+    '.skills',
+    '.skill-section',
+    '.skill-wrap',
+    '.tags-wrap',
+    '.ai-preference-content',
+  ].join(', ');
   const selector = [
     '.resume-basic .label',
     '.resume-basic .badge',
@@ -28,7 +57,8 @@ export function extractBossVisibleSkillTags(): string[] {
     '[class]',
   ].join(', ');
   const tagClassPattern = /(?:^|[-_])(?:tags?|skills?|label|badge)(?:$|[-_])/i;
-  const nonSkillPattern = /^(?:优势|亮点|标签|技能|工作|教育|项目|简历|候选人|推荐|未读|已读|查看|联系|沟通|打招呼|聊一聊|感兴趣|不合适|举报|反馈|当前岗位|字段覆盖率|演示数据|匹配度|非常匹配.*|建议联系.*|本科|硕士|博士|大专|高中|中专|学历|男|女|活跃|今日活跃|刚刚活跃|在线|离线|在职.*|离职.*|随时到岗|应届生|.+工程师|.+经理|.+主管|.+负责人|.+顾问|.+专家|.+架构师|\d+\s*(?:年|岁)(?:经验)?|\d+\s*[-~]\s*\d+\s*年(?:经验)?|\d+\s*[-~]\s*\d+\s*[kK]?)$/;
+  const nonSkillPattern = /^(?:优势|亮点|标签|技能|工作|教育|项目|简历|候选人|推荐|未读|已读|查看|联系|沟通|打招呼|聊一聊|感兴趣|不合适|举报|反馈|当前岗位|字段覆盖率|演示数据|匹配度|非常匹配.*|建议联系.*|招聘规范|我的客服|面试|招聘数据|账号权益|升级VIP|首充礼|筛选|最近关注|职位管理|牛人管理|工具箱|客户端|立即下载|新|本科|硕士|博士|大专|高中|中专|学历|男|女|活跃|今日活跃|刚刚活跃|在线|离线|在职.*|离职.*|随时到岗|应届生|.+专业|.+工程师|.+经理|.+主管|.+负责人|.+顾问|.+专家|.+架构师|\d+|\d+\s*(?:年|岁)(?:经验)?|\d+\s*[-~]\s*\d+\s*年(?:经验)?|\d+\s*[-~]\s*\d+\s*[kK]?)$/;
+  const noisyTextPattern = /\d+\s*[-~]\s*\d+\s*[kK]/i;
   const sampleFormat = /^[\p{Script=Han}A-Za-z0-9#+. _/-]{1,40}$/u;
 
   const normalize = (value: string | null | undefined, maximum = 80): string => (
@@ -109,6 +139,36 @@ export function extractBossVisibleSkillTags(): string[] {
     return matches;
   };
 
+  const preferredScanRoots = (): Element[] => {
+    const visibleRoots = Array.from(document.querySelectorAll(scanRootSelector))
+      .filter((element) => isVisible(element));
+    const roots = visibleRoots.map((element) =>
+      element.closest('.dialog-lib-resume, .lib-resume-recommend, .lib-resume-anonymous')
+        ?? element);
+    return Array.from(new Set(roots)).slice(0, 5);
+  };
+
+  const scanContainers = (): Element[] => {
+    const roots = preferredScanRoots();
+    const containers = roots.flatMap((root) => {
+      const rootAsContainer = root.matches(scanContainerSelector) ? [root] : [];
+      const nested = Array.from(root.querySelectorAll(scanContainerSelector))
+        .filter((element) => isVisible(element));
+      const rootText = normalize(root.textContent, 1_001);
+      const smallRootFallback = nested.length === 0
+        && rootText.length > 0
+        && rootText.length <= 1_000
+        ? [root]
+        : [];
+      return [...rootAsContainer, ...nested, ...smallRootFallback];
+    });
+    const filtered = containers.filter((element) => {
+      const text = normalize(element.textContent, 1_001);
+      return text.length > 0 && text.length <= 1_000;
+    });
+    return Array.from(new Set(filtered)).slice(0, 8);
+  };
+
   const isTagElement = (element: Element): boolean => (
     element.matches('.skill-label, .skill-tag, .tag-item, .label, .badge')
     || element.closest('.tags-wrap, .ai-preference-content-option') !== null
@@ -127,6 +187,8 @@ export function extractBossVisibleSkillTags(): string[] {
     if (!normalized
       || nonSkillPattern.test(normalized)
       || nonSkillPattern.test(compact)
+      || noisyTextPattern.test(normalized)
+      || noisyTextPattern.test(compact)
       || (/^[\p{Script=Han}\s]+$/u.test(normalized) && normalized.length > 10)
       || !sampleFormat.test(normalized)
       || normalized.includes('|')
@@ -137,11 +199,16 @@ export function extractBossVisibleSkillTags(): string[] {
   };
 
   const values = new Set<string>();
-  for (const element of deepQuerySelectorAll(document, selector)) {
-    if (!isVisible(element) || !isTagElement(element) || hasNestedTagElement(element)) {
-      continue;
+  for (const root of scanContainers()) {
+    for (const element of deepQuerySelectorAll(root, selector)) {
+      if (!isVisible(element) || !isTagElement(element) || hasNestedTagElement(element)) {
+        continue;
+      }
+      addSkill(values, normalize(element.textContent, 80));
+      if (values.size >= maxSkills) {
+        break;
+      }
     }
-    addSkill(values, normalize(element.textContent, 80));
     if (values.size >= maxSkills) {
       break;
     }

@@ -242,6 +242,7 @@ function withOcrSkills(snapshot: ParserSnapshot, skills: string[]): ParserSnapsh
 async function readMainWorldDomSkills(
   tabId: number,
   executor: ResumeScriptExecutor,
+  selectedFrameId: number,
 ): Promise<string[]> {
   try {
     const results = await executor({
@@ -250,7 +251,10 @@ async function readMainWorldDomSkills(
       func: extractBossVisibleSkillTags,
     });
     const values = new Set<string>();
-    for (const { result } of results) {
+    for (const { frameId, result } of results) {
+      if (frameId !== selectedFrameId) {
+        continue;
+      }
       if (!isVisibleSkillTagList(result)) {
         continue;
       }
@@ -363,18 +367,24 @@ export async function handleResumeRead(
       return { ok: false, error: 'vue-result-invalid' };
     }
 
-    const ready = probes
-      .filter((probe): probe is Extract<VueResumeProfileFrameProbe, { status: 'ready' }> => (
-        probe.status === 'ready'
+    const ready = results
+      .flatMap(({ frameId, result }) => (
+        isVueResumeProfileFrameProbe(result) && result.status === 'ready'
+          ? [{ frameId, probe: result }]
+          : []
       ))
-      .sort((left, right) => profileScore(right) - profileScore(left));
+      .sort((left, right) => profileScore(right.probe) - profileScore(left.probe));
 
     if (ready.length > 0) {
-      if (ready[0].capability.allowed_keys.length === 0) {
+      const selected = ready[0];
+      if (selected.probe.capability.allowed_keys.length === 0) {
         return { ok: false, error: 'vue-schema-unsupported' };
       }
-      let snapshot = capabilitySnapshot(ready[0], now().toISOString());
-      snapshot = withDomSkills(snapshot, await readMainWorldDomSkills(tabId, executor));
+      let snapshot = capabilitySnapshot(selected.probe, now().toISOString());
+      snapshot = withDomSkills(
+        snapshot,
+        await readMainWorldDomSkills(tabId, executor, selected.frameId),
+      );
       if (!snapshot.profile || snapshot.profile.skills.length === 0) {
         snapshot = withOcrSkills(snapshot, await ocrReader(tabId));
       }

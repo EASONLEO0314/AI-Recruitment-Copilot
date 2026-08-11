@@ -377,7 +377,7 @@ describe('MAIN-world resume read handler', () => {
         },
       }])
       .mockResolvedValueOnce([
-        { frameId: 0, result: ['前端', 'AI全栈开发'] },
+        { frameId: 0, result: ['招聘规范', '我的客服'] },
         { frameId: 4, result: ['前端', '微服务开发'] },
       ]);
     const ocrReader = vi.fn().mockResolvedValue(['OCR 不应调用']);
@@ -396,7 +396,7 @@ describe('MAIN-world resume read handler', () => {
         parser_version: 'boss-vue-v1',
         profile: {
           display_name: '候选人标签',
-          skills: ['前端', 'AI全栈开发', '微服务开发'],
+          skills: ['前端', '微服务开发'],
         },
         present_fields: ['skills', 'display_name'],
         warnings: expect.arrayContaining(['dom-skills:visible-tags']),
