@@ -6,12 +6,14 @@ uses the bundled SQLite knowledge base plus optional DeepSeek enhancement.
 
 ## Server Runtime
 
-- Target service URL: `http://182.92.180.136:8765`
+- Service URL: `http://182.92.180.136:8765`
 - Health check: `GET /healthz`
 - API token: required when `ARC_API_TOKEN` is set on the server.
 - Runtime env file on server: `/etc/ai-recruitment-copilot.env`
 - App directory on server: `/opt/ai-recruitment-copilot`
 - systemd service: `ai-recruitment-copilot.service`
+- Security group must allow inbound TCP `8765`.
+- Current beta ZIP: `/private/tmp/ai-recruitment-copilot-extension-0.2.0-beta.1-server.zip`
 
 The token is not committed. The packaged extension is built with:
 
