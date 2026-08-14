@@ -10,6 +10,7 @@ it('registers the fixed localhost proxy as an MV3 service worker', () => {
   expect(manifest.background).toEqual({ service_worker: 'background.js' });
   expect(manifest.host_permissions).toEqual([
     'http://127.0.0.1:8765/*',
+    'http://39.105.105.248:8765/*',
     'https://www.zhipin.com/*',
   ]);
 });
@@ -28,6 +29,7 @@ it('grants only the scoped MAIN-world resume read permissions', () => {
   expect(manifest.permissions).toEqual(['activeTab', 'clipboardWrite', 'scripting', 'storage']);
   expect(manifest.host_permissions).toEqual([
     'http://127.0.0.1:8765/*',
+    'http://39.105.105.248:8765/*',
     'https://www.zhipin.com/*',
   ]);
 

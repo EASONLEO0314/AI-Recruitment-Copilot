@@ -440,7 +440,7 @@ describe('CopilotPanel', () => {
 
     render(<CopilotPanel />);
 
-    expect(await screen.findByText('本机服务未连接')).toBeInTheDocument();
+    expect(await screen.findByText('评分服务未连接')).toBeInTheDocument();
     act(() => parserClient.emit(loggedOutRelay));
     expect(screen.getByText('BOSS 当前未登录')).toBeInTheDocument();
     expect(screen.getByText('扩展已加载，登录后才可读取候选人资料')).toBeInTheDocument();
@@ -711,7 +711,7 @@ describe('CopilotPanel', () => {
   it('shows the real scoring error without falling back to demo data', async () => {
     const user = userEvent.setup();
     vi.mocked(getMatchAssessment).mockRejectedValueOnce(
-      new ApiError('REQUEST_FAILED', 'Local API returned HTTP 503'),
+      new ApiError('REQUEST_FAILED', '评分服务返回 HTTP 503'),
     );
     render(<CopilotPanel />);
     await waitForOnlinePanel();
@@ -719,7 +719,7 @@ describe('CopilotPanel', () => {
 
     await user.click(screen.getByRole('button', { name: '分析候选人' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Local API returned HTTP 503');
+    expect(await screen.findByRole('alert')).toHaveTextContent('评分服务返回 HTTP 503');
     expect(screen.queryByText('86%')).not.toBeInTheDocument();
     expect(screen.queryByText('92%')).not.toBeInTheDocument();
     expect(screen.queryByText('演示数据')).not.toBeInTheDocument();
@@ -927,7 +927,7 @@ describe('CopilotPanel', () => {
 
     render(<CopilotPanel />);
 
-    expect(await screen.findByText('本机服务未连接')).toBeInTheDocument();
+    expect(await screen.findByText('评分服务未连接')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '重新连接' })).toBeInTheDocument();
     expect(screen.getByText(/scripts\\python\.cmd -m uvicorn/)).toBeInTheDocument();
     expect(getKnowledgeJobs).not.toHaveBeenCalled();
@@ -938,7 +938,7 @@ describe('CopilotPanel', () => {
     const user = userEvent.setup();
     vi.mocked(getHealth).mockRejectedValueOnce(new Error('offline'));
     render(<CopilotPanel />);
-    await screen.findByText('本机服务未连接');
+    await screen.findByText('评分服务未连接');
 
     await user.click(screen.getByRole('button', { name: '重新连接' }));
 
@@ -970,14 +970,14 @@ describe('CopilotPanel', () => {
 
     await user.click(screen.getByRole('button', { name: '刷新连接' }));
 
-    expect(screen.getByText('正在连接本机分析服务')).toBeInTheDocument();
+    expect(screen.getByText('正在连接评分服务')).toBeInTheDocument();
     expect(screen.queryByText('86%')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '刷新连接' })).not.toBeInTheDocument();
 
     await act(async () => {
       rejectRefresh(new Error('offline'));
     });
-    expect(await screen.findByText('本机服务未连接')).toBeInTheDocument();
+    expect(await screen.findByText('评分服务未连接')).toBeInTheDocument();
     expect(getHealth).toHaveBeenCalledTimes(2);
     expect(getMatchAssessment).toHaveBeenCalledTimes(1);
   });

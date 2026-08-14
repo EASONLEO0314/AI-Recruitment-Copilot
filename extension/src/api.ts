@@ -70,7 +70,7 @@ async function sendApiRequest<T>(
   }
 
   if (!validate(response.data)) {
-    throw new ApiError('INVALID_RESPONSE', 'Local API response did not match the expected schema');
+    throw new ApiError('INVALID_RESPONSE', '评分服务响应格式与预期不一致');
   }
 
   return response.data;

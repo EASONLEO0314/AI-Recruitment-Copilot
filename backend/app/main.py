@@ -1,9 +1,12 @@
-"""FastAPI entry point for the local M1 service."""
+"""FastAPI entry point for the recruitment copilot service."""
 
+import hmac
+import os
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from backend.app.assessment_store import (
     assessment_statistics,
@@ -61,15 +64,32 @@ app.add_middleware(
     allow_origin_regex=r"^(chrome-extension://[a-p]{32}|http://127\.0\.0\.1(?::\d+)?)$",
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Request-ID"],
+    allow_headers=["Content-Type", "X-ARC-API-Token", "X-Request-ID"],
     expose_headers=["X-Request-ID"],
 )
+
+
+def _configured_api_token() -> str:
+    return os.environ.get("ARC_API_TOKEN", "").strip()
+
+
+def _request_is_authorized(request: Request, expected_token: str) -> bool:
+    provided_token = request.headers.get("X-ARC-API-Token", "")
+    return bool(provided_token) and hmac.compare_digest(provided_token, expected_token)
 
 
 @app.middleware("http")
 async def attach_request_id(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid4())
     request.state.request_id = request_id
+    api_token = _configured_api_token()
+    if api_token and request.method != "OPTIONS" and request.url.path.startswith(("/healthz", "/v1/")):
+        if not _request_is_authorized(request, api_token):
+            return JSONResponse(
+                status_code=401,
+                content={"detail": "unauthorized"},
+                headers={"X-Request-ID": request_id},
+            )
     response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
     return response

@@ -202,8 +202,8 @@ function railPlacementStyle(layout: PanelLayout): CSSProperties {
 function ConnectionPill({ state }: { state: ConnectionState }) {
   const label = {
     connecting: '正在连接',
-    online: '本机服务在线',
-    offline: '本机服务离线',
+    online: '评分服务在线',
+    offline: '评分服务离线',
   }[state];
 
   return (
@@ -219,7 +219,7 @@ function LoadingState() {
   return (
     <div className="arc-state" role="status">
       <span className="arc-spinner" aria-hidden="true" />
-      <strong>正在连接本机分析服务</strong>
+      <strong>正在连接评分服务</strong>
       <span>首次启动通常只需要几秒钟</span>
     </div>
   );
@@ -230,8 +230,8 @@ function OfflineState({ onRetry }: { onRetry: () => void }) {
   return (
     <div className="arc-state arc-state--offline">
       <span className="arc-state__icon" aria-hidden="true">!</span>
-      <strong>本机服务未连接</strong>
-      <span>请在项目根目录运行：</span>
+      <strong>评分服务未连接</strong>
+      <span>请确认服务已启动且网络可达。本机开发可运行：</span>
       <code>{START_COMMAND}</code>
       <button className="arc-button arc-button--primary" type="button" onClick={onRetry}>
         重新连接
@@ -318,7 +318,7 @@ function scoringWeightsAreValid(weights: ScoringWeights | null): boolean {
 function assessmentErrorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'BACKEND_UNAVAILABLE') {
-      return '评分服务不可用，请确认本机后端正在运行。';
+      return '评分服务不可用，请确认服务已启动且网络可达。';
     }
     if (error.code === 'INVALID_RESPONSE') {
       return '评分服务返回格式异常，请刷新后重试。';
@@ -709,7 +709,7 @@ export function CopilotPanel() {
       setAdminStatus('success');
     } catch {
       if (selectedJobIdRef.current === jobId) {
-        setAdminError('后台数据暂时无法读取，请确认本机服务状态。');
+        setAdminError('后台数据暂时无法读取，请确认评分服务状态。');
         setAdminStatus('error');
       }
     }

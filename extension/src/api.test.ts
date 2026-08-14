@@ -304,7 +304,7 @@ describe('extension API client', () => {
   it('preserves a typed failure returned by the service worker', async () => {
     installRuntime({
       ok: false,
-      error: { code: 'REQUEST_FAILED', message: 'Local API returned HTTP 500' },
+      error: { code: 'REQUEST_FAILED', message: '评分服务返回 HTTP 500' },
     });
 
     await expect(getHealth()).rejects.toMatchObject({

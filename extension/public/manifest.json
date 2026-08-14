@@ -12,6 +12,7 @@
   ],
   "host_permissions": [
     "http://127.0.0.1:8765/*",
+    "http://39.105.105.248:8765/*",
     "https://www.zhipin.com/*"
   ],
   "background": {

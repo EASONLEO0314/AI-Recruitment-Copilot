@@ -84,6 +84,29 @@ describe('background API transport', () => {
     );
   });
 
+  it('uses the configured server endpoint and shared token when provided', async () => {
+    vi.stubEnv('VITE_ARC_API_BASE_URL', 'http://39.105.105.248:8765/');
+    vi.stubEnv('VITE_ARC_API_TOKEN', 'shared-token');
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ status: 'ok' }));
+
+    const response = await handleApiRequest(
+      { type: 'ARC_API_REQUEST', operation: 'health', timeout_ms: 1200 },
+      fetcher,
+    );
+
+    expect(response).toEqual({ ok: true, data: { status: 'ok' } });
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://39.105.105.248:8765/healthz',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Accept: 'application/json',
+          'X-ARC-API-Token': 'shared-token',
+        }),
+        method: 'GET',
+      }),
+    );
+  });
+
   it('posts only the candidate label to the fixed demo endpoint', async () => {
     const fetcher = vi.fn().mockResolvedValue(jsonResponse({ mode: 'demo' }));
 
@@ -299,7 +322,7 @@ describe('background API transport', () => {
 
     expect(response).toEqual({
       ok: false,
-      error: { code: 'REQUEST_FAILED', message: 'Local API returned HTTP 503' },
+      error: { code: 'REQUEST_FAILED', message: '评分服务返回 HTTP 503' },
     });
   });
 
@@ -313,7 +336,7 @@ describe('background API transport', () => {
 
     expect(response).toEqual({
       ok: false,
-      error: { code: 'INVALID_RESPONSE', message: 'Local API returned invalid JSON' },
+      error: { code: 'INVALID_RESPONSE', message: '评分服务返回了无效 JSON' },
     });
   });
 

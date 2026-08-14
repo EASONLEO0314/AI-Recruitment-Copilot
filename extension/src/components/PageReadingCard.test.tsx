@@ -52,7 +52,7 @@ describe('PageReadingCard', () => {
 
     expect(screen.getByText('BOSS 当前未登录')).toBeInTheDocument();
     expect(screen.getByText('扩展已加载，登录后才可读取候选人资料')).toBeInTheDocument();
-    expect(screen.getByText('读取当前简历可能截取页面顶部区域用于技能识别，仅发送到本机服务')).toBeInTheDocument();
+    expect(screen.getByText('读取当前简历可能截取页面顶部区域用于技能识别，仅发送到评分服务')).toBeInTheDocument();
     expect(screen.queryByText('候选人甲')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '重新读取页面' }));
     expect(onRefresh).toHaveBeenCalledOnce();

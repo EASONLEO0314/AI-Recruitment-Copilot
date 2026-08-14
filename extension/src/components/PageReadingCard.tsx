@@ -678,7 +678,7 @@ export function PageReadingCard({
             {expanded ? '收起读取信息' : '展开读取信息'}
           </button>
           <small className="arc-reading__privacy-note">
-            读取当前简历可能截取页面顶部区域用于技能识别，仅发送到本机服务
+            读取当前简历可能截取页面顶部区域用于技能识别，仅发送到评分服务
           </small>
         </div>
       </div>

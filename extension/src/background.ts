@@ -16,7 +16,7 @@ import { buildProfileSnapshot } from './parser/snapshot';
 import { isCandidateProfile, isRecord, isResumeReadRequest } from './validation';
 
 
-const API_BASE_URL = 'http://127.0.0.1:8765';
+const DEFAULT_API_BASE_URL = 'http://127.0.0.1:8765';
 const API_REQUEST_TIMEOUT_MAX_MS = 30_000;
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -44,6 +44,34 @@ interface ActiveTabInfo {
 
 function failure(code: ApiErrorCode, message: string): ApiRuntimeResponse<never> {
   return { ok: false, error: { code, message } };
+}
+
+
+function normalizeApiBaseUrl(value: unknown): string {
+  const raw = typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : DEFAULT_API_BASE_URL;
+  return raw.replace(/\/+$/, '');
+}
+
+
+function configuredApiBaseUrl(): string {
+  return normalizeApiBaseUrl(import.meta.env.VITE_ARC_API_BASE_URL);
+}
+
+
+function configuredApiAuthToken(): string {
+  return String(import.meta.env.VITE_ARC_API_TOKEN ?? '').trim();
+}
+
+
+function withApiHeaders(headers?: HeadersInit): HeadersInit {
+  const token = configuredApiAuthToken();
+  return {
+    Accept: 'application/json',
+    ...(token ? { 'X-ARC-API-Token': token } : {}),
+    ...headers,
+  };
 }
 
 
@@ -163,21 +191,21 @@ export async function handleApiRequest(
   }
 
   try {
-    const response = await fetcher(`${API_BASE_URL}${path}`, {
+    const response = await fetcher(`${configuredApiBaseUrl()}${path}`, {
       ...init,
-      headers: { Accept: 'application/json', ...init.headers },
+      headers: withApiHeaders(init.headers),
       signal: controller.signal,
     });
     if (!response.ok) {
-      return failure('REQUEST_FAILED', `Local API returned HTTP ${response.status}`);
+      return failure('REQUEST_FAILED', `评分服务返回 HTTP ${response.status}`);
     }
     try {
       return { ok: true, data: await response.json() };
     } catch {
-      return failure('INVALID_RESPONSE', 'Local API returned invalid JSON');
+      return failure('INVALID_RESPONSE', '评分服务返回了无效 JSON');
     }
   } catch {
-    return failure('BACKEND_UNAVAILABLE', 'Local API is unavailable');
+    return failure('BACKEND_UNAVAILABLE', '评分服务不可用');
   } finally {
     globalThis.clearTimeout(timeout);
   }
@@ -316,12 +344,11 @@ async function fetchOcrSkills(
   fetcher: Fetcher = fetch,
 ): Promise<string[]> {
   try {
-    const response = await fetcher(`${API_BASE_URL}/v1/ocr/skills`, {
+    const response = await fetcher(`${configuredApiBaseUrl()}/v1/ocr/skills`, {
       method: 'POST',
-      headers: {
-        Accept: 'application/json',
+      headers: withApiHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       body: JSON.stringify({ image_data_url: imageDataUrl }),
     });
     if (!response.ok) {
