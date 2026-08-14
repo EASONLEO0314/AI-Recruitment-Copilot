@@ -6,7 +6,7 @@ uses the bundled SQLite knowledge base plus optional DeepSeek enhancement.
 
 ## Server Runtime
 
-- Target service URL: `http://39.105.105.248:8765`
+- Target service URL: `http://182.92.180.136:8765`
 - Health check: `GET /healthz`
 - API token: required when `ARC_API_TOKEN` is set on the server.
 - Runtime env file on server: `/etc/ai-recruitment-copilot.env`
@@ -16,7 +16,7 @@ uses the bundled SQLite knowledge base plus optional DeepSeek enhancement.
 The token is not committed. The packaged extension is built with:
 
 ```bash
-VITE_ARC_API_BASE_URL=http://39.105.105.248:8765 \
+VITE_ARC_API_BASE_URL=http://182.92.180.136:8765 \
 VITE_ARC_API_TOKEN=<shared-token> \
 npm run build:extension
 ```
