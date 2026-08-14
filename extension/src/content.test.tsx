@@ -126,11 +126,11 @@ describe('content script bootstrap', () => {
     await import('./content');
 
     expect(coordinatorMocks.start).toHaveBeenCalledOnce();
-    expect(coordinatorMocks.start).toHaveBeenCalledWith({
+    expect(coordinatorMocks.start).toHaveBeenCalledWith(expect.objectContaining({
       targetDocument: document,
-      currentUrl: location.href,
       isTopFrame: true,
-    });
+    }));
+    expect(coordinatorMocks.start.mock.calls[0][0].currentUrl()).toBe(location.href);
     expect(document.querySelectorAll('#ai-recruitment-copilot-root')).toHaveLength(1);
   });
 });

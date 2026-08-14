@@ -13,10 +13,11 @@ import {
 } from './parser/vueResumeMapper';
 import { extractBossVisibleSkillTags, isVisibleSkillTagList } from './parser/visibleSkillTags';
 import { buildProfileSnapshot } from './parser/snapshot';
-import { isRecord, isResumeReadRequest } from './validation';
+import { isCandidateProfile, isRecord, isResumeReadRequest } from './validation';
 
 
 const API_BASE_URL = 'http://127.0.0.1:8765';
+const API_REQUEST_TIMEOUT_MAX_MS = 30_000;
 
 type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
@@ -46,13 +47,25 @@ function failure(code: ApiErrorCode, message: string): ApiRuntimeResponse<never>
 }
 
 
+function isScoringWeights(value: unknown): value is Record<string, number> {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const keys = ['skills', 'experience_years', 'education', 'experience_evidence'];
+  return Object.keys(value).length === keys.length
+    && keys.every((key) => Number.isInteger(value[key]))
+    && keys.reduce((sum, key) => sum + Number(value[key]), 0) === 100
+    && keys.every((key) => Number(value[key]) >= 0 && Number(value[key]) <= 100);
+}
+
+
 export function isApiRequestMessage(value: unknown): value is ApiRequestMessage {
   if (!isRecord(value)
     || value.type !== 'ARC_API_REQUEST'
     || typeof value.timeout_ms !== 'number'
     || !Number.isInteger(value.timeout_ms)
     || value.timeout_ms < 100
-    || value.timeout_ms > 10_000) {
+    || value.timeout_ms > API_REQUEST_TIMEOUT_MAX_MS) {
     return false;
   }
 
@@ -60,10 +73,41 @@ export function isApiRequestMessage(value: unknown): value is ApiRequestMessage 
     return true;
   }
 
-  return value.operation === 'demo-assessment'
-    && typeof value.candidate_label === 'string'
-    && value.candidate_label.trim().length > 0
-    && value.candidate_label.length <= 80;
+  if (value.operation === 'demo-assessment') {
+    return typeof value.candidate_label === 'string'
+      && value.candidate_label.trim().length > 0
+      && value.candidate_label.length <= 80;
+  }
+
+  if (value.operation === 'match-assessment' || value.operation === 'match-explanation') {
+    return typeof value.job_id === 'string'
+      && value.job_id.trim().length > 0
+      && value.job_id.length <= 80
+      && isCandidateProfile(value.candidate_profile)
+      && (!('scoring_weights' in value) || isScoringWeights(value.scoring_weights));
+  }
+
+  if (value.operation === 'scoring-standard') {
+    return typeof value.job_id === 'string'
+      && value.job_id.trim().length > 0
+      && value.job_id.length <= 80;
+  }
+
+  if (value.operation === 'knowledge-jobs' || value.operation === 'admin-assessments') {
+    return Number.isInteger(value.limit)
+      && Number(value.limit) >= 1
+      && Number(value.limit) <= (value.operation === 'knowledge-jobs' ? 200 : 100);
+  }
+
+  if (value.operation === 'knowledge-job-detail') {
+    return typeof value.job_id === 'string'
+      && value.job_id.trim().length > 0
+      && value.job_id.length <= 80;
+  }
+
+  return value.operation === 'admin-dashboard'
+    || value.operation === 'knowledge-aliases'
+    || value.operation === 'knowledge-quality';
 }
 
 
@@ -74,16 +118,49 @@ export async function handleApiRequest(
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), message.timeout_ms);
 
-  const path = message.operation === 'health'
-    ? '/healthz'
-    : '/v1/demo/assessment';
-  const init: RequestInit = message.operation === 'health'
-    ? { method: 'GET' }
-    : {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidate_label: message.candidate_label }),
-      };
+  let path = '/healthz';
+  let init: RequestInit = { method: 'GET' };
+
+  if (message.operation === 'demo-assessment') {
+    path = '/v1/demo/assessment';
+    init = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidate_label: message.candidate_label }),
+    };
+  } else if (message.operation === 'match-assessment' || message.operation === 'match-explanation') {
+    path = message.operation === 'match-explanation'
+      ? '/v1/assessment/match/explanation'
+      : '/v1/assessment/match';
+    init = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        job_id: message.job_id,
+        candidate_profile: message.candidate_profile,
+        ...(message.scoring_weights ? { scoring_weights: message.scoring_weights } : {}),
+      }),
+    };
+  } else if (message.operation === 'scoring-standard') {
+    path = '/v1/assessment/scoring-standard';
+    init = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_id: message.job_id }),
+    };
+  } else if (message.operation === 'knowledge-jobs') {
+    path = `/v1/knowledge/jobs?limit=${encodeURIComponent(String(message.limit))}`;
+  } else if (message.operation === 'admin-dashboard') {
+    path = '/v1/admin/dashboard';
+  } else if (message.operation === 'admin-assessments') {
+    path = `/v1/admin/assessments?limit=${encodeURIComponent(String(message.limit))}`;
+  } else if (message.operation === 'knowledge-aliases') {
+    path = '/v1/admin/aliases';
+  } else if (message.operation === 'knowledge-quality') {
+    path = '/v1/knowledge/quality';
+  } else if (message.operation === 'knowledge-job-detail') {
+    path = `/v1/knowledge/jobs/${encodeURIComponent(message.job_id)}`;
+  }
 
   try {
     const response = await fetcher(`${API_BASE_URL}${path}`, {
@@ -521,6 +598,10 @@ export function createRuntimeMessageListener(
 
     if (typeof message === 'object' && message !== null) {
       const messageType = (message as { type?: unknown }).type;
+      if (messageType === 'ARC_API_REQUEST') {
+        sendResponse(failure('REQUEST_FAILED', '评分请求格式异常，请重新读取简历后再试。'));
+        return true;
+      }
       if (messageType === 'ARC_PARSER_SNAPSHOT' || messageType === 'ARC_PARSER_REFRESH') {
         void parserRouter(message, sender).then(
           (ok) => sendResponse({ ok }),

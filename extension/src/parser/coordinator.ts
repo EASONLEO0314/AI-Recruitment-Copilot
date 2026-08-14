@@ -12,7 +12,15 @@ import { buildStatusSnapshot } from './snapshot';
 
 
 const MUTATION_DEBOUNCE_MS = 400;
+const ROUTE_POLL_MS = 500;
 const RESUME_ROOT_SELECTORS = ['.resume-content', '.resume-box', '.geek-resume', 'main'];
+const OBSERVER_OPTIONS: MutationObserverInit = {
+  childList: true,
+  subtree: true,
+  characterData: true,
+  attributes: true,
+  attributeFilter: ['class', 'aria-selected', 'hidden', 'aria-hidden'],
+};
 
 
 export interface CoordinatorHandle {
@@ -22,7 +30,7 @@ export interface CoordinatorHandle {
 
 export interface CoordinatorOptions {
   targetDocument: Document;
-  currentUrl: string;
+  currentUrl: string | (() => string);
   isTopFrame: boolean;
   sendMessage?: (message: ParserSnapshotMessage) => Promise<unknown>;
   runtimeOnMessage?: typeof chrome.runtime.onMessage;
@@ -57,6 +65,11 @@ function defaultRuntimeOnMessage(): typeof chrome.runtime.onMessage | undefined 
 
 function defaultObserver(): typeof MutationObserver | undefined {
   return typeof MutationObserver === 'undefined' ? undefined : MutationObserver;
+}
+
+
+function currentUrlFor(options: CoordinatorOptions): string {
+  return typeof options.currentUrl === 'function' ? options.currentUrl() : options.currentUrl;
 }
 
 
@@ -143,10 +156,13 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
   let stopped = false;
   let pageKind: PageKind = 'unsupported';
   let timer: ReturnType<typeof setTimeout> | undefined;
+  let routeTimer: ReturnType<typeof setInterval> | undefined;
   let observer: MutationObserver | undefined;
+  let observationRoot: Element | null = null;
   let lastSuccessfulKey: string | undefined;
   let nextSendSequence = 0;
   let lastSuccessfulSequence = 0;
+  let lastRouteUrl = currentUrlFor(options);
   const inFlightByKey = new Map<string, number>();
 
   const decrementInFlight = (key: string): void => {
@@ -200,6 +216,48 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
     sendSnapshot(snapshot, nextDedupeKey);
   };
 
+  const scheduleRun = (force = false): void => {
+    if (stopped) {
+      return;
+    }
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+    timer = setTimeout(() => {
+      timer = undefined;
+      run(force);
+    }, MUTATION_DEBOUNCE_MS);
+  };
+
+  const observeCurrentRoot = (): void => {
+    if (!Observer) {
+      return;
+    }
+
+    let nextRoot: Element | null = null;
+    try {
+      nextRoot = findObservationRoot(pageKind, options.targetDocument);
+    } catch {
+      emitSnapshot(
+        buildStatusSnapshot(pageKind, 'error', 'parser-exception', now()),
+      );
+    }
+
+    if (nextRoot === observationRoot) {
+      return;
+    }
+
+    observer?.disconnect();
+    observer = undefined;
+    observationRoot = nextRoot;
+    if (!nextRoot) {
+      return;
+    }
+
+    observer = new Observer(() => scheduleRun());
+    observer.observe(nextRoot, OBSERVER_OPTIONS);
+  };
+
   const run = (force = false): void => {
     if (stopped) {
       return;
@@ -209,7 +267,7 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
     try {
       pageKind = classifyPage(
         options.targetDocument,
-        options.currentUrl,
+        currentUrlFor(options),
         options.isTopFrame,
       );
       snapshot = buildSnapshot(pageKind, options.targetDocument, now());
@@ -218,6 +276,16 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
     }
 
     emitSnapshot(snapshot, force);
+    observeCurrentRoot();
+  };
+
+  const watchRoute = (): void => {
+    const nextUrl = currentUrlFor(options);
+    if (nextUrl === lastRouteUrl) {
+      return;
+    }
+    lastRouteUrl = nextUrl;
+    run(true);
   };
 
   const runtimeListener: Parameters<typeof chrome.runtime.onMessage.addListener>[0] = (
@@ -235,35 +303,7 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
   runtimeOnMessage?.addListener(runtimeListener);
   run();
 
-  let observationRoot: Element | null = null;
-  try {
-    observationRoot = findObservationRoot(pageKind, options.targetDocument);
-  } catch {
-    emitSnapshot(
-      buildStatusSnapshot(pageKind, 'error', 'parser-exception', now()),
-    );
-  }
-  if (observationRoot && Observer) {
-    observer = new Observer(() => {
-      if (stopped) {
-        return;
-      }
-      if (timer !== undefined) {
-        clearTimeout(timer);
-      }
-      timer = setTimeout(() => {
-        timer = undefined;
-        run();
-      }, MUTATION_DEBOUNCE_MS);
-    });
-    observer.observe(observationRoot, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-      attributes: true,
-      attributeFilter: ['class', 'aria-selected', 'hidden', 'aria-hidden'],
-    });
-  }
+  routeTimer = setInterval(watchRoute, ROUTE_POLL_MS);
 
   return {
     stop(): void {
@@ -274,6 +314,10 @@ export function startParserCoordinator(options: CoordinatorOptions): Coordinator
       if (timer !== undefined) {
         clearTimeout(timer);
         timer = undefined;
+      }
+      if (routeTimer !== undefined) {
+        clearInterval(routeTimer);
+        routeTimer = undefined;
       }
       observer?.disconnect();
       runtimeOnMessage?.removeListener(runtimeListener);

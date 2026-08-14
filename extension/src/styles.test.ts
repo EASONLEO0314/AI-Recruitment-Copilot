@@ -4,19 +4,19 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 
-describe('message suggestion tabs', () => {
-  it('makes each full grid column a stable click target', () => {
+describe('real-assessment controls', () => {
+  it('keeps the job selector and analyze control stable inside the extension namespace', () => {
     const styles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8');
-    const rule = styles.match(/\.arc-tabs button\s*{([^}]*)}/)?.[1] ?? '';
+    const selectRule = styles.match(/\.arc-job-select\s*{([^}]*)}/)?.[1] ?? '';
+    const controlRule = styles.match(/\.arc-assessment-control__body\s*{([^}]*)}/)?.[1] ?? '';
+    const compactStateRule = styles.match(/\.arc-state--compact\s*{([^}]*)}/)?.[1] ?? '';
 
-    expect(rule).toMatch(/width:\s*100%/);
-    expect(rule).toMatch(/min-height:\s*44px/);
-    expect(rule).toMatch(/position:\s*relative/);
-    expect(rule).toMatch(/z-index:\s*1/);
-    expect(rule).toMatch(/pointer-events:\s*auto/);
-    expect(rule).toMatch(/display:\s*flex/);
-    expect(rule).toMatch(/align-items:\s*center/);
-    expect(rule).toMatch(/justify-content:\s*center/);
+    expect(selectRule).toMatch(/width:\s*206px/);
+    expect(selectRule).toMatch(/min-height:\s*27px/);
+    expect(selectRule).toMatch(/border-radius:\s*8px/);
+    expect(controlRule).toMatch(/grid-template-columns:\s*1fr auto/);
+    expect(controlRule).toMatch(/align-items:\s*center/);
+    expect(compactStateRule).toMatch(/min-height:\s*112px/);
   });
 });
 
@@ -30,6 +30,7 @@ describe('page-reading styles', () => {
     expect(styles).toMatch(/\.arc-reading__badge\s*{/);
     expect(styles).toMatch(/\.arc-reading__facts\s*{/);
     expect(styles).toMatch(/\.arc-reading__skills\s*{/);
+    expect(styles).toMatch(/\.arc-reading__privacy-note\s*{/);
     expect(styles).toMatch(/\.arc-reading__missing\s*{/);
     expect(styles).toMatch(/\.arc-reading[^{]*button[^}]*pointer-events:\s*auto/s);
   });

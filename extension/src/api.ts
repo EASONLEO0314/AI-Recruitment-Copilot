@@ -1,10 +1,31 @@
 import type {
+  AdminDashboardResponse,
   ApiErrorCode,
   ApiRequestMessage,
   AssessmentResponse,
+  AssessmentRecordsResponse,
+  CandidateProfile,
   HealthResponse,
+  KnowledgeAliasesResponse,
+  KnowledgeJobDetailResponse,
+  KnowledgeJobsResponse,
+  KnowledgeQualityResponse,
+  MatchAssessmentResponse,
+  ScoringStandardResponse,
 } from './contracts';
-import { isAssessmentResponse, isHealthResponse, isRecord } from './validation';
+import {
+  isAdminDashboardResponse,
+  isAssessmentResponse,
+  isAssessmentRecordsResponse,
+  isHealthResponse,
+  isKnowledgeAliasesResponse,
+  isKnowledgeJobDetailResponse,
+  isKnowledgeJobsResponse,
+  isKnowledgeQualityResponse,
+  isMatchAssessmentResponse,
+  isRecord,
+  isScoringStandardResponse,
+} from './validation';
 
 
 export class ApiError extends Error {
@@ -76,5 +97,142 @@ export function getDemoAssessment(
       timeout_ms: timeoutMs,
     },
     isAssessmentResponse,
+  );
+}
+
+
+export function getKnowledgeJobs(timeoutMs = 5000): Promise<KnowledgeJobsResponse> {
+  return sendApiRequest(
+    {
+      type: 'ARC_API_REQUEST',
+      operation: 'knowledge-jobs',
+      limit: 80,
+      timeout_ms: timeoutMs,
+    },
+    isKnowledgeJobsResponse,
+  );
+}
+
+
+export function getAdminDashboard(timeoutMs = 5000): Promise<AdminDashboardResponse> {
+  return sendApiRequest(
+    {
+      type: 'ARC_API_REQUEST',
+      operation: 'admin-dashboard',
+      timeout_ms: timeoutMs,
+    },
+    isAdminDashboardResponse,
+  );
+}
+
+
+export function getAssessmentRecords(
+  limit = 20,
+  timeoutMs = 5000,
+): Promise<AssessmentRecordsResponse> {
+  return sendApiRequest(
+    {
+      type: 'ARC_API_REQUEST',
+      operation: 'admin-assessments',
+      limit,
+      timeout_ms: timeoutMs,
+    },
+    isAssessmentRecordsResponse,
+  );
+}
+
+
+export function getKnowledgeAliases(timeoutMs = 5000): Promise<KnowledgeAliasesResponse> {
+  return sendApiRequest(
+    {
+      type: 'ARC_API_REQUEST',
+      operation: 'knowledge-aliases',
+      timeout_ms: timeoutMs,
+    },
+    isKnowledgeAliasesResponse,
+  );
+}
+
+
+export function getKnowledgeQuality(timeoutMs = 5000): Promise<KnowledgeQualityResponse> {
+  return sendApiRequest(
+    {
+      type: 'ARC_API_REQUEST',
+      operation: 'knowledge-quality',
+      timeout_ms: timeoutMs,
+    },
+    isKnowledgeQualityResponse,
+  );
+}
+
+
+export function getKnowledgeJobDetail(
+  jobId: string,
+  timeoutMs = 5000,
+): Promise<KnowledgeJobDetailResponse> {
+  return sendApiRequest(
+    {
+      type: 'ARC_API_REQUEST',
+      operation: 'knowledge-job-detail',
+      job_id: jobId,
+      timeout_ms: timeoutMs,
+    },
+    isKnowledgeJobDetailResponse,
+  );
+}
+
+
+export function getMatchAssessment(
+  jobId: string,
+  candidateProfile: CandidateProfile,
+  scoringWeights?: Record<string, number>,
+  timeoutMs = 15000,
+): Promise<MatchAssessmentResponse> {
+  return sendApiRequest(
+    {
+      type: 'ARC_API_REQUEST',
+      operation: 'match-assessment',
+      job_id: jobId,
+      candidate_profile: candidateProfile,
+      ...(scoringWeights ? { scoring_weights: scoringWeights } : {}),
+      timeout_ms: timeoutMs,
+    },
+    isMatchAssessmentResponse,
+  );
+}
+
+
+export function getMatchExplanation(
+  jobId: string,
+  candidateProfile: CandidateProfile,
+  scoringWeights?: Record<string, number>,
+  timeoutMs = 12000,
+): Promise<MatchAssessmentResponse> {
+  return sendApiRequest(
+    {
+      type: 'ARC_API_REQUEST',
+      operation: 'match-explanation',
+      job_id: jobId,
+      candidate_profile: candidateProfile,
+      ...(scoringWeights ? { scoring_weights: scoringWeights } : {}),
+      timeout_ms: timeoutMs,
+    },
+    isMatchAssessmentResponse,
+  );
+}
+
+
+export function getScoringStandard(
+  jobId: string,
+  timeoutMs = 30000,
+): Promise<ScoringStandardResponse> {
+  return sendApiRequest(
+    {
+      type: 'ARC_API_REQUEST',
+      operation: 'scoring-standard',
+      job_id: jobId,
+      timeout_ms: timeoutMs,
+    },
+    isScoringStandardResponse,
   );
 }

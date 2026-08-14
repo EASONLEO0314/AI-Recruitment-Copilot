@@ -7,6 +7,7 @@ import {
   readVisibleTopOcrSkills,
 } from './background';
 import * as backgroundModule from './background';
+import type { CandidateProfile } from './contracts';
 
 
 type ResumeReadHandler = (
@@ -57,6 +58,16 @@ function installChromeForOcr({
 }
 
 
+const candidateProfile: CandidateProfile = {
+  display_name: '张同学',
+  experience_years: 4,
+  education: [{ school: '匿名大学', degree: '本科' }],
+  work_experiences: [],
+  project_experiences: [{ name: 'RAG 项目', description: '负责 LangChain RAG 应用' }],
+  skills: ['Python', 'RAG'],
+};
+
+
 describe('background API transport', () => {
   it('fetches health from the one allowed localhost endpoint', async () => {
     const fetcher = vi.fn().mockResolvedValue(jsonResponse({ status: 'ok' }));
@@ -95,6 +106,189 @@ describe('background API transport', () => {
     );
   });
 
+  it('posts only the selected job id and CandidateProfile to the fixed match endpoint', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ mode: 'rule_v1.1' }));
+
+    await handleApiRequest(
+      {
+        type: 'ARC_API_REQUEST',
+        operation: 'match-assessment',
+        job_id: 'job-ai4s',
+        candidate_profile: candidateProfile,
+        timeout_ms: 6500,
+      },
+      fetcher,
+    );
+
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://127.0.0.1:8765/v1/assessment/match',
+      expect.objectContaining({
+        body: JSON.stringify({
+          job_id: 'job-ai4s',
+          candidate_profile: candidateProfile,
+        }),
+        method: 'POST',
+      }),
+    );
+  });
+
+  it('forwards bounded HR scoring weights to the fixed match endpoint', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ mode: 'rule_v1.1' }));
+    const scoringWeights = {
+      skills: 50,
+      experience_years: 10,
+      education: 10,
+      experience_evidence: 30,
+    };
+
+    await handleApiRequest(
+      {
+        type: 'ARC_API_REQUEST',
+        operation: 'match-assessment',
+        job_id: 'job-ai4s',
+        candidate_profile: candidateProfile,
+        scoring_weights: scoringWeights,
+        timeout_ms: 6500,
+      },
+      fetcher,
+    );
+
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://127.0.0.1:8765/v1/assessment/match',
+      expect.objectContaining({
+        body: JSON.stringify({
+          job_id: 'job-ai4s',
+          candidate_profile: candidateProfile,
+          scoring_weights: scoringWeights,
+        }),
+        method: 'POST',
+      }),
+    );
+  });
+
+  it('posts explanation enhancement requests to the fixed local endpoint', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ mode: 'rule_v1.1' }));
+
+    await handleApiRequest(
+      {
+        type: 'ARC_API_REQUEST',
+        operation: 'match-explanation',
+        job_id: 'job-ai4s',
+        candidate_profile: candidateProfile,
+        timeout_ms: 30000,
+      },
+      fetcher,
+    );
+
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://127.0.0.1:8765/v1/assessment/match/explanation',
+      expect.objectContaining({
+        body: JSON.stringify({
+          job_id: 'job-ai4s',
+          candidate_profile: candidateProfile,
+        }),
+        method: 'POST',
+      }),
+    );
+  });
+
+  it('fetches knowledge job options from the fixed local endpoint', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ request_id: 'jobs-1', jobs: [] }));
+
+    await handleApiRequest(
+      {
+        type: 'ARC_API_REQUEST',
+        operation: 'knowledge-jobs',
+        limit: 80,
+        timeout_ms: 3500,
+      },
+      fetcher,
+    );
+
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://127.0.0.1:8765/v1/knowledge/jobs?limit=80',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('fetches fixed admin and knowledge-management endpoints', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ request_id: 'admin-1' }));
+
+    await handleApiRequest(
+      { type: 'ARC_API_REQUEST', operation: 'admin-dashboard', timeout_ms: 3500 },
+      fetcher,
+    );
+    await handleApiRequest(
+      {
+        type: 'ARC_API_REQUEST',
+        operation: 'admin-assessments',
+        limit: 20,
+        timeout_ms: 3500,
+      },
+      fetcher,
+    );
+    await handleApiRequest(
+      { type: 'ARC_API_REQUEST', operation: 'knowledge-aliases', timeout_ms: 3500 },
+      fetcher,
+    );
+    await handleApiRequest(
+      { type: 'ARC_API_REQUEST', operation: 'knowledge-quality', timeout_ms: 3500 },
+      fetcher,
+    );
+    await handleApiRequest(
+      {
+        type: 'ARC_API_REQUEST',
+        operation: 'knowledge-job-detail',
+        job_id: 'job-ai4s',
+        timeout_ms: 3500,
+      },
+      fetcher,
+    );
+
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://127.0.0.1:8765/v1/admin/dashboard',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://127.0.0.1:8765/v1/admin/assessments?limit=20',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://127.0.0.1:8765/v1/admin/aliases',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://127.0.0.1:8765/v1/knowledge/quality',
+      expect.objectContaining({ method: 'GET' }),
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://127.0.0.1:8765/v1/knowledge/jobs/job-ai4s',
+      expect.objectContaining({ method: 'GET' }),
+    );
+  });
+
+  it('posts scoring-standard requests to the fixed local endpoint', async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({ request_id: 'standard-1' }));
+
+    await handleApiRequest(
+      {
+        type: 'ARC_API_REQUEST',
+        operation: 'scoring-standard',
+        job_id: 'job-ai4s',
+        timeout_ms: 30000,
+      },
+      fetcher,
+    );
+
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://127.0.0.1:8765/v1/assessment/scoring-standard',
+      expect.objectContaining({
+        body: JSON.stringify({ job_id: 'job-ai4s' }),
+        method: 'POST',
+      }),
+    );
+  });
+
   it('maps a non-success HTTP status to a typed failure', async () => {
     const fetcher = vi.fn().mockResolvedValue(jsonResponse({}, 503));
 
@@ -123,11 +317,98 @@ describe('background API transport', () => {
     });
   });
 
-  it('rejects messages outside the two fixed API operations', () => {
+  it('accepts only fixed API operations with bounded payloads', () => {
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'match-assessment',
+      job_id: 'job-ai4s',
+      candidate_profile: candidateProfile,
+      timeout_ms: 15000,
+    })).toBe(true);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'match-explanation',
+      job_id: 'job-ai4s',
+      candidate_profile: candidateProfile,
+      timeout_ms: 30000,
+    })).toBe(true);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'scoring-standard',
+      job_id: 'job-ai4s',
+      timeout_ms: 30000,
+    })).toBe(true);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'knowledge-jobs',
+      limit: 80,
+      timeout_ms: 3500,
+    })).toBe(true);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'admin-dashboard',
+      timeout_ms: 3500,
+    })).toBe(true);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'admin-assessments',
+      limit: 20,
+      timeout_ms: 3500,
+    })).toBe(true);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'knowledge-aliases',
+      timeout_ms: 3500,
+    })).toBe(true);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'knowledge-quality',
+      timeout_ms: 3500,
+    })).toBe(true);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'knowledge-job-detail',
+      job_id: 'job-ai4s',
+      timeout_ms: 3500,
+    })).toBe(true);
     expect(isApiRequestMessage({
       type: 'ARC_API_REQUEST',
       operation: 'proxy-url',
       url: 'https://example.com',
+    })).toBe(false);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'match-assessment',
+      job_id: 'job-ai4s',
+      candidate_profile: { ...candidateProfile, education: 'invalid' },
+      timeout_ms: 6500,
+    })).toBe(false);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'match-assessment',
+      job_id: 'job-ai4s',
+      candidate_profile: candidateProfile,
+      scoring_weights: { skills: 90, experience_years: 10 },
+      timeout_ms: 6500,
+    })).toBe(false);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'match-assessment',
+      job_id: 'job-ai4s',
+      candidate_profile: candidateProfile,
+      timeout_ms: 30001,
+    })).toBe(false);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'admin-assessments',
+      limit: 101,
+      timeout_ms: 3500,
+    })).toBe(false);
+    expect(isApiRequestMessage({
+      type: 'ARC_API_REQUEST',
+      operation: 'knowledge-job-detail',
+      job_id: '',
+      timeout_ms: 3500,
     })).toBe(false);
   });
 });
@@ -168,6 +449,36 @@ describe('background runtime listener', () => {
       'http://127.0.0.1:8765/healthz',
       expect.objectContaining({ method: 'GET' }),
     );
+    expect(routeParser).not.toHaveBeenCalled();
+  });
+
+  it('returns a typed failure for malformed API requests instead of dropping the channel', () => {
+    const fetcher = vi.fn();
+    const routeParser = vi.fn();
+    const sendResponse = vi.fn();
+    const listener = createRuntimeMessageListener(fetcher, routeParser);
+
+    const keepChannelOpen = listener(
+      {
+        type: 'ARC_API_REQUEST',
+        operation: 'match-assessment',
+        job_id: 'job-ai4s',
+        candidate_profile: { ...candidateProfile, education: 'invalid' },
+        timeout_ms: 15000,
+      },
+      {},
+      sendResponse,
+    );
+
+    expect(keepChannelOpen).toBe(true);
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      error: {
+        code: 'REQUEST_FAILED',
+        message: '评分请求格式异常，请重新读取简历后再试。',
+      },
+    });
+    expect(fetcher).not.toHaveBeenCalled();
     expect(routeParser).not.toHaveBeenCalled();
   });
 

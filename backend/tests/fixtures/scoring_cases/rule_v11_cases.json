@@ -1,0 +1,135 @@
+{
+  "schema": "arc-scoring-cases-v1",
+  "cases": [
+    {
+      "id": "direct_alias_bonus",
+      "job": {
+        "_source_row": 2,
+        "岗位名称": "全栈开发工程师",
+        "岗位jd": "本科及以上学历，2年以上经验，熟悉 JavaScript、Node.js、React。加分项 熟悉 Docker、CI/CD。",
+        "岗位关键词（必备技能）": "JavaScript、Node.js、React",
+        "需求数量": 1
+      },
+      "candidate_profile": {
+        "experience_years": 3,
+        "education": [
+          {
+            "degree": "本科",
+            "major": "软件工程"
+          }
+        ],
+        "skills": ["JS", "ReactJS", "Docker"],
+        "work_experiences": [
+          {
+            "company": "匿名科技",
+            "title": "全栈开发工程师",
+            "description": "负责 Node.js 服务和 React 前端页面开发，使用 JavaScript 和 Docker 完成部署。"
+          }
+        ],
+        "project_experiences": [
+          {
+            "name": "内部运营平台",
+            "description": "接入 CI/CD 流水线，独立负责接口联调和上线。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "transfer_rich_candidate",
+      "job": {
+        "_source_row": 3,
+        "岗位名称": "全栈开发工程师",
+        "岗位jd": "本科及以上学历，1年以上经验，熟悉 JavaScript、Node.js、Python、React。",
+        "岗位关键词（必备技能）": "JavaScript、Node.js、Python、React",
+        "需求数量": 1
+      },
+      "candidate_profile": {
+        "experience_years": 1,
+        "education": [
+          {
+            "degree": "本科",
+            "major": "计算机科学与技术"
+          }
+        ],
+        "skills": ["Java", "Vue", "Python", "自动化测试", "接口测试"],
+        "work_experiences": [
+          {
+            "company": "腾讯",
+            "title": "测试开发实习生",
+            "description": "参与接口自动化测试平台建设，使用 Python、SQL、Redis 做数据校验和自动化用例。"
+          },
+          {
+            "company": "匿名创业公司",
+            "title": "全栈开发实习生",
+            "description": "负责 Java 后端接口、Vue 页面和 MySQL 数据库设计，完成需求联调与上线。"
+          }
+        ],
+        "project_experiences": [
+          {
+            "name": "校园协作系统",
+            "role": "核心开发",
+            "description": "独立负责 REST API、权限模块和前端页面，完成部署上线。"
+          }
+        ],
+        "summary": "候选人有测开、全栈和 Java 后端实习经历，项目覆盖接口、数据库、前端页面和上线交付。"
+      }
+    },
+    {
+      "id": "related_cap",
+      "job": {
+        "_source_row": 4,
+        "岗位名称": "Node 前端工程师",
+        "岗位jd": "本科及以上学历，熟悉 Node.js、React。",
+        "岗位关键词（必备技能）": "Node.js、React",
+        "需求数量": 1
+      },
+      "candidate_profile": {
+        "education": [
+          {
+            "degree": "本科",
+            "major": "软件工程"
+          }
+        ],
+        "skills": ["Java", "Spring Boot", "Vue"],
+        "work_experiences": [
+          {
+            "company": "匿名科技",
+            "title": "后端开发实习生",
+            "description": "负责 Java Spring Boot 接口开发，并配合 Vue 页面联调。"
+          }
+        ]
+      }
+    },
+    {
+      "id": "explicit_not_satisfied",
+      "job": {
+        "_source_row": 5,
+        "岗位名称": "前端工程师",
+        "岗位jd": "本科及以上学历，熟悉 React、Node.js。",
+        "岗位关键词（必备技能）": "React、Node.js",
+        "需求数量": 1
+      },
+      "candidate_profile": {
+        "education": [
+          {
+            "degree": "本科",
+            "major": "软件工程"
+          }
+        ],
+        "skills": ["JavaScript"],
+        "summary": "候选人明确表示不熟悉 React，也没有 Node.js 经验。"
+      }
+    },
+    {
+      "id": "insufficient_candidate",
+      "job": {
+        "_source_row": 6,
+        "岗位名称": "后端工程师",
+        "岗位jd": "本科及以上学历，3年以上经验，熟悉 Java、Spring Boot、Redis。",
+        "岗位关键词（必备技能）": "Java、Spring Boot、Redis",
+        "需求数量": 1
+      },
+      "candidate_profile": {}
+    }
+  ]
+}

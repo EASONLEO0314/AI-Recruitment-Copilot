@@ -52,12 +52,14 @@ describe('PageReadingCard', () => {
 
     expect(screen.getByText('BOSS 当前未登录')).toBeInTheDocument();
     expect(screen.getByText('扩展已加载，登录后才可读取候选人资料')).toBeInTheDocument();
+    expect(screen.getByText('读取当前简历可能截取页面顶部区域用于技能识别，仅发送到本机服务')).toBeInTheDocument();
     expect(screen.queryByText('候选人甲')).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '重新读取页面' }));
     expect(onRefresh).toHaveBeenCalledOnce();
   });
 
-  it('shows a local partial profile with safe facts and missing-field labels', () => {
+  it('shows a compact local profile and expands safe facts on demand', async () => {
+    const user = userEvent.setup();
     render(
       <PageReadingCard snapshot={partialSnapshot} onRefresh={vi.fn()} refreshing={false} />,
     );
@@ -69,6 +71,11 @@ describe('PageReadingCard', () => {
     expect(screen.getByText('工作 0')).toBeInTheDocument();
     expect(screen.getByText('教育 0')).toBeInTheDocument();
     expect(screen.getByText('项目 0')).toBeInTheDocument();
+    expect(screen.getByText('覆盖率 20%')).toBeInTheDocument();
+    expect(screen.queryByText('TypeScript')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '展开读取信息' }));
+
     expect(screen.getByText('TypeScript')).toBeInTheDocument();
     expect(screen.getByText('React')).toBeInTheDocument();
     expect(screen.getByText(/缺少：工作经历/)).toBeInTheDocument();
@@ -78,13 +85,18 @@ describe('PageReadingCard', () => {
     expect(screen.queryByText('真实评估')).not.toBeInTheDocument();
   });
 
-  it('uses a safe fallback candidate label for a ready profile', () => {
+  it('uses a safe fallback candidate label for a ready profile', async () => {
+    const user = userEvent.setup();
     render(
       <PageReadingCard snapshot={readySnapshot} onRefresh={vi.fn()} refreshing={false} />,
     );
 
     expect(screen.getByText('当前候选人')).toBeInTheDocument();
     expect(screen.getByText('0 年经验')).toBeInTheDocument();
+    expect(screen.getByText('覆盖率 100%')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '展开读取信息' }));
+
     expect(screen.getByText('字段覆盖率 100%')).toBeInTheDocument();
     expect(screen.queryByText(/缺少：/)).not.toBeInTheDocument();
   });
@@ -132,7 +144,8 @@ describe('PageReadingCard', () => {
     },
   );
 
-  it('shows only safe structural diagnostics for an unsupported recommend frame', () => {
+  it('shows only safe structural diagnostics for an unsupported recommend frame', async () => {
+    const user = userEvent.setup();
     const snapshot = {
       ...buildStatusSnapshot(
         'recommend_frame',
@@ -159,6 +172,9 @@ describe('PageReadingCard', () => {
 
     render(<PageReadingCard snapshot={snapshot} onRefresh={vi.fn()} refreshing={false} />);
 
+    expect(screen.getByText('当前页面结构暂不支持')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '展开读取信息' }));
+
     expect(screen.getByText('已识别 BOSS 推荐页，但候选人结构未匹配')).toBeInTheDocument();
     expect(screen.getByText('旧选择器命中 0')).toBeInTheDocument();
     expect(screen.getByText('recommend-detail')).toBeInTheDocument();
@@ -177,7 +193,8 @@ describe('PageReadingCard', () => {
     expect(screen.queryByText('recommend-active-card-not-found')).not.toBeInTheDocument();
   });
 
-  it('shows every anonymous frame and the deterministic selection evidence', () => {
+  it('shows every anonymous frame and the deterministic selection evidence', async () => {
+    const user = userEvent.setup();
     const snapshot = {
       ...buildStatusSnapshot(
         'recommend_frame',
@@ -224,6 +241,8 @@ describe('PageReadingCard', () => {
         refreshing={false}
       />,
     );
+
+    await user.click(screen.getByRole('button', { name: '展开读取信息' }));
 
     expect(screen.getByText('已选择 frame 2 · 检测到固定简历栏目')).toBeInTheDocument();
     expect(screen.getByText(/frame 0 · 页面外壳 · 已读取/)).toBeInTheDocument();
@@ -289,7 +308,8 @@ describe('PageReadingCard', () => {
     expect(screen.getByRole('button', { name: '正在读取简历' })).toBeDisabled();
   });
 
-  it('shows only safe Vue capability and top-level schema metadata', () => {
+  it('shows Vue capability and top-level schema metadata only after expanding reading details', async () => {
+    const user = userEvent.setup();
     const resumeSnapshot: ParserSnapshot = {
       schema_version: 1,
       parser_version: 'boss-vue-v1',
@@ -330,6 +350,11 @@ describe('PageReadingCard', () => {
         resumeSnapshot={resumeSnapshot}
       />,
     );
+
+    expect(screen.queryByText('已找到可读取的 resumeInfo')).not.toBeInTheDocument();
+    expect(screen.queryByText('resumeInfo 顶层字段（仅结构）')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '展开读取信息' }));
 
     expect(screen.getByText('已找到可读取的 resumeInfo')).toBeInTheDocument();
     expect(screen.getByText('推荐简历根')).toBeInTheDocument();

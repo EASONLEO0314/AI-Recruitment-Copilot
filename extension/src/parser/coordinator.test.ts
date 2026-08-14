@@ -251,6 +251,29 @@ describe('parser coordinator', () => {
       .toBe('匿名候选人乙');
   });
 
+  it('reparses on SPA route changes even when the observed root does not emit', () => {
+    setRecommendFixture();
+    let currentUrl = 'https://www.zhipin.com/web/frame/recommend?candidate=1';
+    const sendMessage = vi.fn(async (_message: ParserSnapshotMessage) => undefined);
+
+    startParserCoordinator({
+      targetDocument: document,
+      currentUrl: () => currentUrl,
+      isTopFrame: false,
+      sendMessage,
+      Observer: FakeObserver as unknown as typeof MutationObserver,
+      now: () => capturedAt,
+    });
+
+    document.querySelector('.candidate-card-wrap .name')!.textContent = '匿名候选人乙';
+    currentUrl = 'https://www.zhipin.com/web/frame/recommend?candidate=2';
+    vi.advanceTimersByTime(500);
+
+    expect(sendMessage).toHaveBeenCalledTimes(2);
+    expect(sendMessage.mock.calls[1][0].snapshot.profile?.display_name)
+      .toBe('匿名候选人乙');
+  });
+
   it('forces an unchanged snapshot on the exact refresh command and removes the listener on stop', () => {
     setRecommendFixture();
     const runtime = createRuntimeOnMessage();

@@ -5,7 +5,7 @@ import { startParserCoordinator } from './parser/coordinator';
 
 export interface ContentBootstrapOptions {
   targetDocument: Document;
-  currentUrl: string;
+  currentUrl: string | (() => string);
   isTopFrame: boolean;
 }
 
@@ -40,7 +40,7 @@ if (
 ) {
   bootstrapContentScript({
     targetDocument: document,
-    currentUrl: location.href,
+    currentUrl: () => location.href,
     isTopFrame: window.top === window,
   });
 }

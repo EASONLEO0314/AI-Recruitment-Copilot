@@ -1,3 +1,5 @@
+import { useState } from 'react';
+
 import type {
   PageKind,
   ParserSnapshot,
@@ -440,6 +442,64 @@ function ReadingStatus({ snapshot }: { snapshot: ParserSnapshot | null }) {
 }
 
 
+function CompactReadingStatus({ snapshot }: { snapshot: ParserSnapshot | null }) {
+  if (!snapshot) {
+    return <strong>等待页面读取</strong>;
+  }
+
+  if (snapshot.page_kind === 'logged_out') {
+    return (
+      <>
+        <strong>BOSS 当前未登录</strong>
+        <span>扩展已加载，登录后才可读取候选人资料</span>
+      </>
+    );
+  }
+
+  if (snapshot.page_kind === 'non_candidate') {
+    return <strong>当前页面没有可读取的候选人资料</strong>;
+  }
+
+  if (snapshot.page_kind === 'unsupported' || snapshot.status === 'unsupported') {
+    return <strong>当前页面结构暂不支持</strong>;
+  }
+
+  if (snapshot.status === 'error') {
+    return <strong>页面读取失败，可手动重试</strong>;
+  }
+
+  const profile = snapshot.profile;
+  if (!profile) {
+    return <strong>等待页面读取</strong>;
+  }
+
+  const presentCoreFields = new Set(
+    snapshot.present_fields.filter((field) => CORE_PROFILE_FIELDS.has(field)),
+  );
+  const coverage = Math.round((presentCoreFields.size / CORE_PROFILE_FIELDS.size) * 100);
+
+  return (
+    <>
+      <span className="arc-reading__badge">
+        {snapshot.parser_version === 'boss-vue-v1'
+          ? 'Vue 精确读取（仅本地）'
+          : 'DOM 摘要（仅本地）'}
+      </span>
+      <strong>{profile.display_name ?? '当前候选人'}</strong>
+      <div className="arc-reading__facts">
+        {profile.current_title && <span>{profile.current_title}</span>}
+        {profile.location && <span>{profile.location}</span>}
+        {profile.experience_years !== undefined && <span>{profile.experience_years} 年经验</span>}
+        <span>工作 {profile.work_experiences.length}</span>
+        <span>教育 {profile.education.length}</span>
+        <span>项目 {profile.project_experiences.length}</span>
+        <span>覆盖率 {coverage}%</span>
+      </div>
+    </>
+  );
+}
+
+
 function ResumeCapabilityStatus({
   reading,
   snapshot,
@@ -593,8 +653,14 @@ export function PageReadingCard({
   resumeSnapshot = null,
   resumeReadError = null,
 }: PageReadingCardProps) {
+  const [expanded, setExpanded] = useState(false);
+  const showResumeStatus = expanded || resumeReading || resumeReadError;
+
   return (
-    <section className="arc-reading" aria-labelledby="arc-reading-title">
+    <section
+      className={`arc-reading ${expanded ? 'arc-reading--expanded' : 'arc-reading--collapsed'}`}
+      aria-labelledby="arc-reading-title"
+    >
       <div className="arc-section__heading">
         <h2 id="arc-reading-title">页面读取</h2>
         <div className="arc-reading__actions">
@@ -604,23 +670,37 @@ export function PageReadingCard({
           <button type="button" disabled={resumeReading} onClick={onReadResume}>
             {resumeReading ? '正在读取简历' : '读取当前简历'}
           </button>
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((current) => !current)}
+          >
+            {expanded ? '收起读取信息' : '展开读取信息'}
+          </button>
+          <small className="arc-reading__privacy-note">
+            读取当前简历可能截取页面顶部区域用于技能识别，仅发送到本机服务
+          </small>
         </div>
       </div>
       <div className="arc-reading__status" role="status">
-        <ReadingStatus snapshot={snapshot} />
+        {expanded ? <ReadingStatus snapshot={snapshot} /> : <CompactReadingStatus snapshot={snapshot} />}
       </div>
-      <div className="arc-reading__resume" aria-live="polite">
-        <ResumeCapabilityStatus
-          reading={resumeReading}
-          snapshot={resumeSnapshot}
-          error={resumeReadError}
+      {showResumeStatus && (
+        <div className="arc-reading__resume" aria-live="polite">
+          <ResumeCapabilityStatus
+            reading={resumeReading}
+            snapshot={resumeSnapshot}
+            error={resumeReadError}
+          />
+        </div>
+      )}
+      {expanded && (
+        <FrameDiagnostics
+          frames={frameDiagnostics}
+          selectedFrameId={selectedFrameId}
+          selectionReason={selectionReason}
         />
-      </div>
-      <FrameDiagnostics
-        frames={frameDiagnostics}
-        selectedFrameId={selectedFrameId}
-        selectionReason={selectionReason}
-      />
+      )}
     </section>
   );
 }
